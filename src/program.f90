@@ -100,7 +100,7 @@ program DALES
 !!----------------------------------------------------------------
 !!     0.0    USE STATEMENTS FOR CORE MODULES
 !!----------------------------------------------------------------
-  use modglobal,         only : rk3step,timeleft
+  use modglobal,         only : rk3step,timeleft,lopenbc,rdt,rtimee
   use modmpi,            only : initmpicomm
   use modstartup,        only : startup, writerestartfiles,testwctime,exitmodules
   use modtimedep,        only : timedep
@@ -150,9 +150,11 @@ program DALES
   !use modprojection,   only : initprojection, projection
   use modchem,         only : initchem,twostep
   use modcanopy,       only : initcanopy, canopy, exitcanopy
+  use modopenboundary, only : openboundary_ghost,openboundary_tend,openboundary_phasevelocity,openboundary_turb
 
 
   implicit none
+  real :: rdtold=10
 
 !----------------------------------------------------------------
 !     1      READ NAMELISTS,INITIALISE GRID, CONSTANTS AND FIELDS
@@ -200,9 +202,22 @@ program DALES
   call testwctime
 
   do while (timeleft>0 .or. rk3step < 3)
-    call tstep_update                           ! Calculate new timestep
+    call tstep_update                          ! Calculate new timestep
+    if(rtimee>10..and.rdt+rdtold<2..and.rk3step==1) then ! Fail save when waves build up to big remove after testing
+      print *, 'exited prematurely, rdt = ',rdtold,rdt,'s rtimee = ',rtimee,'s'
+      exit
+    endif
     call timedep
     call samptend(tend_start,firstterm=.true.)
+
+!-----------------------------------------------------
+!   3.1   Openboundaries
+!-----------------------------------------------------
+    if(lopenbc) then
+      call openboundary_turb
+      call openboundary_ghost
+      call openboundary_tend
+    endif
 
 !-----------------------------------------------------
 !   3.1   RADIATION
@@ -257,7 +272,11 @@ program DALES
     call samptend(tend_pois,lastterm=.true.)
 
     call tstep_integrate                        ! Apply tendencies to all variables
-    call boundary
+    if(lopenbc) then
+      call openboundary_ghost
+    else
+      call boundary
+    endif
     !call tiltedboundary
 !-----------------------------------------------------
 !   3.6   LIQUID WATER CONTENT AND DIAGNOSTIC FIELDS

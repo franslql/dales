@@ -8,7 +8,7 @@
 !!  \author Frans Liqui Lung
 !  This file is part of DALES.
 !  To do:
-!  - Allow for different zint
+!  - Allow for different zint and adjust rhointi accordingly
 !  - Correct non divergence free input
 !  - Allow for non-homogeneous starting conditions
 !  - Change definition uphase for division by 0
@@ -86,6 +86,8 @@ contains
     boundary(4)%nx1w = imax; boundary(4)%nx2w = k1
     boundary(5)%nx1w = imax; boundary(5)%nx2w = jmax
     ! Set number of patches for correction factor for radiation boundary conditions
+    if(dxint == -1.) dxint = real(itot)*dx ! Set dxint to entire width as default
+    if(dyint == -1.) dxint = real(jtot)*dy ! Set dyint to entire width as default
     nxpatch = int(dx/dxint*real(itot));
     nypatch = int(dy/dyint*real(jtot));
     if(mod(dxint,dx)/=0 .or. mod(dyint,dy)/=0) then

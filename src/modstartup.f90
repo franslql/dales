@@ -77,14 +77,14 @@ contains
     use modmicrophysics,   only : initmicrophysics
     use modsubgrid,        only : initsubgrid
     use mpi
-    use modmpi,            only : initmpi,commwrld,my_real,myid,nprocx,nprocy,mpierr
+    use modmpi,            only : initmpi,commwrld,my_real,myid,nprocx,nprocy,mpierr,periods
     use modchem,           only : initchem
     use modversion,        only : git_version
-    
+
     implicit none
     integer :: ierr
     character(256), optional, intent(in) :: path
-    
+
     !declare namelists
     namelist/RUN/ &
         iexpnr,lwarmstart,startfile,ltotruntime, runtime,dtmax,wctime,dtav_glob,timeav_glob,&
@@ -104,6 +104,8 @@ contains
         llsadv,  lqlnr, lambda_crit, cu, cv, ibas_prf, iadv_mom, iadv_tke, iadv_thl, iadv_qt, iadv_sv, lnoclouds
     namelist/SOLVER/ &
         solver_id, maxiter, tolerance, n_pre, n_post, precond
+    namelist/OPENBC/ &
+        lopenbc,dxint,dyint,dzint,tau0,lper,lsynturb,isynturb,lambda,tau,nmodes,nfreq,lambda_x,lambda_y,lambda_z
 
 
     ! get myid
@@ -145,18 +147,26 @@ contains
       read (ifnamopt,SOLVER,iostat=ierr)
       call checknamelisterror(ierr, ifnamopt, 'SOLVER')
       write(6 ,SOLVER)
+      read (ifnamopt,OPENBC,iostat=ierr)
+      call checknamelisterror(ierr, ifnamopt, 'OPENBC')
+      write(6 ,OPENBC)
+      close(ifnamopt)
+      ! Check if grid needs to be periodic
+      lperiodic(1:4) = lper
+      if(lopenbc) periods = (/lperiodic(1),lperiodic(3)/)
       close(ifnamopt)
     end if
 
 
     ! these must be shared before initmpi sets up the cartesian grid
     ! commwrld is already set up
+    call MPI_BCAST(periods,2,MPI_LOGICAL,0,commwrld,mpierr)
     call MPI_BCAST(nprocx ,1,MPI_INTEGER,0,commwrld,mpierr)
     call MPI_BCAST(nprocy ,1,MPI_INTEGER,0,commwrld,mpierr)
 
     ! Initialize MPI
     call initmpi
-    
+
   !broadcast namelists
     call MPI_BCAST(iexpnr     ,1,MPI_INTEGER,0,commwrld,mpierr)
     call MPI_BCAST(lwarmstart ,1,MPI_LOGICAL,0,commwrld,mpierr)
@@ -256,14 +266,35 @@ contains
     call MPI_BCAST(n_post,1,MPI_INTEGER,0,commwrld,mpierr)
     call MPI_BCAST(tolerance,1,MY_REAL,0,commwrld,mpierr)
     call MPI_BCAST(precond,1,MPI_INTEGER,0,commwrld,mpierr)
-    
+
+    ! Broadcast openboundaries Variables
+    call MPI_BCAST(lopenbc,1,MPI_LOGICAL,0,commwrld,mpierr)
+    call MPI_BCAST(dxint,1,MY_REAL   ,0,commwrld,mpierr)
+    call MPI_BCAST(dyint,1,MY_REAL   ,0,commwrld,mpierr)
+    call MPI_BCAST(dzint,1,MY_REAL   ,0,commwrld,mpierr)
+    call MPI_BCAST(tau0,1,MY_REAL   ,0,commwrld,mpierr)
+    call MPI_BCAST(lperiodic,5,MPI_LOGICAL,0,commwrld,mpierr)
+    call MPI_BCAST(lsynturb,1,MPI_LOGICAL,0,commwrld,mpierr)
+    call MPI_BCAST(isynturb,1,MPI_INTEGER,0,commwrld,mpierr)
+    call MPI_BCAST(lambda,1,MY_REAL   ,0,commwrld,mpierr)
+    call MPI_BCAST(lambda_x,1,MY_REAL   ,0,commwrld,mpierr)
+    call MPI_BCAST(lambda_y,1,MY_REAL   ,0,commwrld,mpierr)
+    call MPI_BCAST(lambda_z,1,MY_REAL   ,0,commwrld,mpierr)
+    call MPI_BCAST(tau,1,MY_REAL   ,0,commwrld,mpierr)
+    call MPI_BCAST(nmodes,1,MPI_INTEGER   ,0,commwrld,mpierr)
+    call MPI_BCAST(nfreq,1,MPI_INTEGER   ,0,commwrld,mpierr)
+
     call testwctime
     ! Allocate and initialize core modules
     call initglobal
     call initfields
     call inittestbed    !reads initial profiles from scm_in.nc, to be used in readinitfiles
 
-    call initboundary
+    if(.not.lopenbc) then
+      call initboundary
+    else
+      call initopenboundary
+    endif
     call initthermodynamics
     call initradiation
     call initchem
@@ -274,7 +305,7 @@ contains
     call readinitfiles ! moved to obtain the correct btime for the timedependent forcings in case of a warmstart
     call inittimedep !depends on modglobal,modfields, modmpi, modsurf, modradiation
     call initpois ! hypre solver needs grid and baseprofiles
-    
+
     call checkinitvalues
 
 
@@ -395,6 +426,7 @@ contains
 
     use modtestbed,        only : ltestbed,tb_ps,tb_thl,tb_qt,tb_u,tb_v,tb_w,tb_ug,tb_vg,&
                                   tb_dqtdxls,tb_dqtdyls,tb_qtadv,tb_thladv
+    use modopenboundary,   only : openboundary_ghost,openboundary_readboundary
 
     integer i,j,k,n
     logical negval !switch to allow or not negative values in randomnization
@@ -428,7 +460,7 @@ contains
         if (ltestbed) then
 
           write(*,*) 'readinitfiles: testbed mode: profiles for initialization obtained from scm_in.nc'
-          
+
           do k=1,kmax
             height (k) = zf(k)
             thlprof(k) = tb_thl(1,k)
@@ -443,7 +475,7 @@ contains
           !thls
           !wtsurf
           !wqsurf
-         
+
         else
 
           open (ifinput,file='prof.inp.'//cexpnr)
@@ -460,7 +492,7 @@ contains
                 vprof  (k), &
                 e12prof(k)
           end do
-        
+
           close(ifinput)
 
         end if   !ltestbed
@@ -609,6 +641,12 @@ contains
       svs = svprof(1,:)
 
       call baseprofs ! call baseprofs before thermodynamics
+      if(lopenbc) then
+        call openboundary_readboundary
+        call openboundary_ghost
+      else
+        call boundary
+      endif
       call boundary
       call thermodynamics
       call surface
@@ -620,7 +658,11 @@ contains
 !        dsv(n) = (svprof(kmax,n)-svprof(kmax-1,n)) / dzh(kmax)
 !      end do
 
-      call boundary
+      if(lopenbc) then
+        call openboundary_ghost
+      else
+        call boundary
+      endif
       call thermodynamics
 
       ! save initial pressure profiles
@@ -714,7 +756,7 @@ contains
       if (ltestbed) then
 
           write(*,*) 'readinitfiles: testbed mode: profiles for ls forcing obtained from scm_in.nc'
-          
+
           do k=1,kmax
             height (k) = zf(k)
             ug     (k) = tb_ug(1,k)
@@ -725,7 +767,7 @@ contains
             dqtdtls(k) = tb_qtadv(1,k)
             thlpcar(k) = tb_thladv(1,k)
           end do
-         
+
       else
 
         open (ifinput,file='lscale.inp.'//cexpnr)
@@ -962,7 +1004,7 @@ contains
     if (rk3Step/=3) return
 
     if (timee<tnextrestart) dt_lim = min(dt_lim,tnextrestart-timee)
-    
+
     ! if trestart > 0, write a restartfile every trestart seconds and at the end
     ! if trestart = 0, write restart files only at the end of the simulation
     ! if trestart < 0, don't write any restart files
@@ -992,7 +1034,7 @@ contains
     integer i,j,k,n
     character(50) name,linkname
 
-    
+
       ihour = floor(rtimee/3600)
       imin  = floor((rtimee-ihour * 3600) /3600. * 60.)
       name = 'initdXXXhXXmXXXXXXXX.XXX'
@@ -1144,6 +1186,7 @@ contains
     use modsubgrid,        only : exitsubgrid
     use modsurface,        only : exitsurface
     use modthermodynamics, only : exitthermodynamics
+    use modopenboundary,   only : exitopenboundary
 
     call exittimedep
     call exitthermodynamics
@@ -1152,7 +1195,11 @@ contains
     call exitradiation
     call exitpois
     call exitmicrophysics
-    call exitboundary
+    if(lopenbc) then
+      call exitopenboundary
+    else
+      call exitboundary
+    endif
     call exitfields
     call exitglobal
     call exitmpi
@@ -1189,7 +1236,7 @@ contains
             j >= js .and. j <= je) then
             if (.not. negval) then ! Avoid non-physical negative values
               field(i-is+2,j-js+2,klev) = field(i-is+2,j-js+2,klev) + (ran-0.5)*2.0*min(ampl,field(i-is+2,j-js+2,klev))
-            else 
+            else
               field(i-is+2,j-js+2,klev) = field(i-is+2,j-js+2,klev) + (ran-0.5)*2.0*ampl
             endif
 

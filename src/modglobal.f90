@@ -57,7 +57,7 @@ save
       logical :: llsadv   = .false. !<  switch for large scale forcings
       integer :: ntimedep = 100     !< maximum number of time points for time-dependent forcings
 
-      
+
       !< Parameter kinds, for rrtmg radiation scheme
       integer, parameter :: kind_rb = selected_real_kind(12) ! 8 byte real
       integer, parameter :: kind_im = selected_int_kind(6)   ! 4 byte integer
@@ -198,7 +198,28 @@ save
 
       character(3) cexpnr
 
-
+      ! Variables for modopenboundary.f90
+      logical :: lopenbc = .false., lsynturb = .false.
+      type turbpar_type
+        real(16),dimension(3,3) :: eigvec
+        real,dimension(3) :: eigval
+        real,dimension(3) :: ci
+        real,dimension(:,:,:), allocatable :: p,q,knorm
+        real,dimension(:,:), allocatable :: omega
+      end type
+      type boundary_type
+        integer :: nx1,nx2,nx1patch,nx2patch,nx1u,nx2u,nx1v,nx2v,nx1w,nx2w
+        real, allocatable, dimension(:,:,:) :: u,v,w,thl,qt,e12
+        real, allocatable, dimension(:,:) :: radcorr,uphase,uphasesingle, &
+          radcorrsingle,uturb,vturb,wturb
+        type(turbpar_type), dimension(:,:), allocatable :: turbpar
+      end type
+      type(boundary_type), dimension(5) :: boundary
+      logical, dimension(5) :: lboundary = .false.
+      logical, dimension(5) :: lperiodic = (/.false.,.false.,.false.,.false.,.false./)
+      real :: dxint=-1.,dyint=-1.,dzint=-1.,tau0=60,lambda,tau,lambda_x=-1.,lambda_y=-1.,lambda_z=-1.
+      integer :: isynturb = 0,nmodes=100,nfreq=25,ntboundary=1
+      real,dimension(:),allocatable :: tboundary
 
       ! modphsgrd.f90
 

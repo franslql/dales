@@ -99,7 +99,7 @@ contains
     use mpi
     use modmpi, only : myid, myidx, myidy, nprocx, nprocy
     use modglobal, only : imax, jmax, kmax, dzf, dzh, dx, dy, itot, jtot, &
-      solver_id, maxiter, n_pre, n_post, tolerance, precond
+      solver_id, maxiter, n_pre, n_post, tolerance, precond,lopenbc,lperiodic,lboundary
 
     use modfields, only : rhobf, rhobh
 

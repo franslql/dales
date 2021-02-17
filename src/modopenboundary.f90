@@ -51,7 +51,7 @@ contains
   subroutine initopenboundary
     ! Initialisation routine for openboundaries
     use modmpi, only : myidx, myidy, nprocx, nprocy
-    use modglobal, only : imax,jmax,kmax,i1,j1,k1,dx,dy,dzf,itot,jtot,zf,zh
+    use modglobal, only : imax,jmax,kmax,i1,j1,k1,dx,dy,dzf,itot,jtot,zf,zh,solver_id
     use modfields, only : rhobf
     implicit none
     integer :: i,j

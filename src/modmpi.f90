@@ -47,7 +47,7 @@ save
   integer  :: nprocy = 0
   integer  :: mpierr
   integer  :: my_real = MPI_DOUBLE_PRECISION
-  logical periods(2) = .true.
+  logical :: periods(2) = .true.
 
   real     :: CPU_program    !end time
   real     :: CPU_program0   !start time

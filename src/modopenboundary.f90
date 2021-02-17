@@ -449,7 +449,7 @@ contains
   subroutine openboundary_ghost
     ! Subroutine that fills the ghost cells for the cell centred variables at the boundary
     use modglobal, only : i1,j1,k1,ih,jh,nsv
-    use modfields, only : um,u0,vm,v0,wm,w0,e12m,e120,thlm,thl0,qtm,qt0,svm,sv0
+    use modfields, only : um,u0,vm,v0,wm,w0,e12m,e120,thlm,thl0,qtm,qt0,svm,sv0,thl0av,qt0av,u0av,v0av
     implicit none
     integer :: i,n
     if(.not.lopenbc) return
@@ -477,8 +477,8 @@ contains
       call applyboundaryf(thl0 ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%thl,boundary(i)%nx1,boundary(i)%nx2,profile=thl0av)
       call applyboundaryf(qtm  ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%qt,boundary(i)%nx1,boundary(i)%nx2,profile=qt0av)
       call applyboundaryf(qt0  ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%qt,boundary(i)%nx1,boundary(i)%nx2,profile=qt0av)
-      call applyboundaryf(e12m ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%e12,boundary(i)%nx1,boundary(i)%nx2,profile=e120av)
-      call applyboundaryf(e120 ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%e12,boundary(i)%nx1,boundary(i)%nx2,profile=e120av)
+      call applyboundaryf(e12m ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%e12,boundary(i)%nx1,boundary(i)%nx2)
+      call applyboundaryf(e120 ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%e12,boundary(i)%nx1,boundary(i)%nx2)
       if(lsynturb) then
         if(i/=1.and.i/=2) call applyboundaryf(um,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%u,boundary(i)%nx1u,boundary(i)%nx2u,turbin=boundary(i)%uturb,profile=u0av)
         if(i/=1.and.i/=2) call applyboundaryf(u0,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%u,boundary(i)%nx1u,boundary(i)%nx2u,turbin=boundary(i)%uturb,profile=u0av)
@@ -863,7 +863,7 @@ contains
             a(sx-1,j+1,k)=a(sx,j+1,k)
           else ! Robin inflow conditions
             coefdir = 1.
-            coefneu = merge(-u0(sx,j+1,k)*tau0-e120(sx,j+1,k)/u0(sx,j+1,k)*dx,0.,lrobin)
+            coefneu = -u0(sx,j+1,k)*tau0-e120(sx,j+1,k)/u0(sx,j+1,k)*dx
             valtarget = fp*val(j,k,itp)+fm*val(j,k,itm)
             a(sx-1,j+1,k) = ( 2.*dx*(valtarget+turb(j,k)) - &
               a(sx,j+1,k)*(coefdir*dx+2.*coefneu) ) / (coefdir*dx-2.*coefneu)
@@ -877,7 +877,7 @@ contains
             a(ex+1,j+1,k)=a(ex,j+1,k)
           else ! Robin or Dirichlet inflow conditions
             coefdir = 1.
-            coefneu = merge(-u0(ex+1,j+1,k)*tau0-e120(ex,j+1,k)/u0(ex+1,j+1,k)*dx,0.,lrobin)
+            coefneu = -u0(ex+1,j+1,k)*tau0-e120(ex,j+1,k)/u0(ex+1,j+1,k)*dx
             valtarget = fp*val(j,k,itp)+fm*val(j,k,itm)
             a(ex+1,j+1,k) = ( 2.*dx*(valtarget+turb(j,k)) - &
               a(ex,j+1,k)*(coefdir*dx-2.*coefneu) ) / (coefdir*dx+2.*coefneu)
@@ -891,7 +891,7 @@ contains
             a(i+1,sy-1,k)=a(i+1,sy,k)
           else ! Robin or Dirichlet inflow conditions
             coefdir = 1.
-            coefneu = merge(-v0(i+1,sy,k)*tau0-e120(i+1,sy,k)/v0(i+1,sy,k)*dy,0.,lrobin)
+            coefneu = -v0(i+1,sy,k)*tau0-e120(i+1,sy,k)/v0(i+1,sy,k)*dy
             valtarget = fp*val(i,k,itp)+fm*val(i,k,itm)
             a(i+1,sy-1,k) = ( 2.*dy*(valtarget+turb(i,k)) - &
               a(i+1,sy,k)*(coefdir*dy+2.*coefneu) ) / (coefdir*dy-2.*coefneu)
@@ -905,7 +905,7 @@ contains
             a(i+1,ey+1,k)=a(i+1,ey,k)
           else ! Robin or Dirichlet inflow conditions
             coefdir = 1.
-            coefneu = merge(-v0(i+1,ey+1,k)*tau0-e120(i+1,ey,k)/v0(i+1,ey+1,k)*dy,0.,lrobin)
+            coefneu = -v0(i+1,ey+1,k)*tau0-e120(i+1,ey,k)/v0(i+1,ey+1,k)*dy
             valtarget = fp*val(i,k,itp)+fm*val(i,k,itm)
             a(i+1,ey+1,k) = ( 2.*dy*(valtarget+turb(i,k)) - &
               a(i+1,ey,k)*(coefdir*dy-2.*coefneu) ) / (coefdir*dy+2.*coefneu)
@@ -926,7 +926,7 @@ contains
             a(i+1,j+1,ez)=ddz*dzh(ez)+a(i+1,j+1,ez-1)
           else ! Robin inflow conditions
             coefdir = 1.
-            coefneu = merge(-w0(i+1,j+1,ez)*tau0-e120(i+1,j+1,ez-1)/w0(i+1,j+1,ez)*dzh(ez),0.,lrobin)
+            coefneu = -w0(i+1,j+1,ez)*tau0-e120(i+1,j+1,ez-1)/w0(i+1,j+1,ez)*dzh(ez)
             valtarget = fp*val(i,j,itp)+fm*val(i,j,itm) - &
               (w0(i+1,j+1,ez)*tau0+e120(i+1,j+1,ez-1)/w0(i+1,j+1,ez)*dzh(ez))*ddz
             a(i+1,j+1,ez) = ( 2.*dzh(ez)*(valtarget+turb(i,j)) - &

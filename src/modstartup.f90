@@ -59,7 +59,8 @@ contains
                                   nsv,itot,jtot,kmax,xsize,ysize,xlat,xlon,xyear,xday,xtime,&
                                   lmoist,lcoriol,lpressgrad,igrw_damp,geodamptime,lmomsubs,cu, cv,ifnamopt,fname_options,llsadv,&
                                   ibas_prf,lambda_crit,iadv_mom,iadv_tke,iadv_thl,iadv_qt,iadv_sv,courant,peclet,ladaptive,author,lnoclouds,lrigidlid,unudge,ntimedep, &
-                                  solver_id, maxiter, tolerance, n_pre, n_post, precond, checknamelisterror
+                                  solver_id, maxiter, tolerance, n_pre, n_post, precond, checknamelisterror, &
+                                  lopenbc,lperiodic,dxint,dyint,dzint,tau0,lsynturb,isynturb,nmodes,nfreq,tau,lambda,lambda_x,lambda_y,lambda_z
     use modforces,         only : lforce_user
     use modsurfdata,       only : z0,ustin,wtsurf,wqsurf,wsvsurf,ps,thls,isurf
     use modsurface,        only : initsurface
@@ -80,9 +81,11 @@ contains
     use modmpi,            only : initmpi,commwrld,my_real,myid,nprocx,nprocy,mpierr,periods
     use modchem,           only : initchem
     use modversion,        only : git_version
+    use modopenboundary,   only : initopenboundary
 
     implicit none
     integer :: ierr
+    logical,dimension(4) :: lper = .false.
     character(256), optional, intent(in) :: path
 
     !declare namelists
@@ -413,7 +416,7 @@ contains
                                   rtimee,timee,ntrun,btime,dt_lim,nsv,&
                                   zf,dzf,dzh,rv,rd,cp,rlv,pref0,om23_gs,&
                                   ijtot,cu,cv,e12min,dzh,cexpnr,ifinput,lwarmstart,ltotruntime,itrestart,&
-                                  trestart, ladaptive,llsadv,tnextrestart,longint
+                                  trestart, ladaptive,llsadv,tnextrestart,longint,lopenbc
     use modsubgrid,        only : ekm,ekh
     use modsurfdata,       only : wsvsurf, &
                                   thls,tskin,tskinm,tsoil,tsoilm,phiw,phiwm,Wl,Wlm,thvs,qts,isurf,svs,obl,oblav,&
@@ -1176,7 +1179,7 @@ contains
 
   subroutine exitmodules
     use modfields,         only : exitfields
-    use modglobal,         only : exitglobal
+    use modglobal,         only : exitglobal,lopenbc
     use modmpi,            only : exitmpi
     use modboundary,       only : exitboundary
     use modmicrophysics,   only : exitmicrophysics

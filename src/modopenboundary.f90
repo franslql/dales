@@ -630,18 +630,18 @@ contains
   subroutine openboundary_turb
     ! Subroutine that calls the synthetic turbulence routine for the generation
     ! of synthetic turbulence at the dirichlet inflow boundaries.
-    use modglobal, only : rtimee,rk3step,rdt
-    use modsynturb, only : synturb
-    implicit none
-    integer :: i
-    if(.not.lsynturb .or. .not. lopenbc .or. rk3step/=1) return
-    do i = 1,5
-      if(.not.(lboundary(i)).or.lperiodic(i)) cycle
-      call synturb(i,rtimee,uturbtemp,vturbtemp,wturbtemp,nx1max,nx2max)
-      boundary(i)%uturb = uturbtemp(1:boundary(i)%nx1u,1:boundary(i)%nx2u)
-      boundary(i)%vturb = vturbtemp(1:boundary(i)%nx1v,1:boundary(i)%nx2v)
-      boundary(i)%wturb = wturbtemp(1:boundary(i)%nx1w,1:boundary(i)%nx2w)
-    end do
+    !use modglobal, only : rtimee,rk3step,rdt
+    !use modsynturb, only : synturb
+    !implicit none
+    !integer :: i
+    !if(.not.lsynturb .or. .not. lopenbc .or. rk3step/=1) return
+    !do i = 1,5
+    !  if(.not.(lboundary(i)).or.lperiodic(i)) cycle
+    !  call synturb(i,rtimee,uturbtemp,vturbtemp,wturbtemp,nx1max,nx2max)
+    !  boundary(i)%uturb = uturbtemp(1:boundary(i)%nx1u,1:boundary(i)%nx2u)
+    !  boundary(i)%vturb = vturbtemp(1:boundary(i)%nx1v,1:boundary(i)%nx2v)
+    !  boundary(i)%wturb = wturbtemp(1:boundary(i)%nx1w,1:boundary(i)%nx2w)
+    !end do
   end subroutine openboundary_turb
 
   subroutine openboundary_excjs(a,sx,ex,sy,ey,sz,ez,ih,jh,switch)

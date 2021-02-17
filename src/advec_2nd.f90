@@ -238,6 +238,7 @@ subroutine advecv_2nd(putin, putout, sy)
   use modfields, only : u0, v0, w0, rhobf
   implicit none
 
+  integer,intent(in) :: sy
   real, dimension(2-ih:i1+ih,2-jh:j1+jh,k1), intent(in)  :: putin !< Input: the v-field
   real, dimension(2-ih:i1+ih,2-jh:j1+jh,k1), intent(inout) :: putout !< Output: the tendency
 !  real, dimension(2-ih:i1+ih,2-jh:j1+jh,k1) :: rhoputin

@@ -58,6 +58,8 @@ contains
     real :: yt(jmax),ym(j1)
 
     if(.not.lopenbc) return
+    ! Check if hypre solver is selected
+    if(solver_id == 0 .or. solver_id == 100) stop 'Openboundaries only possible with HYPRE pressure solver, change solver_id to 1'
     ! Check if boundary is present on process
     if(myidx==0)        lboundary(1) = .true.
     if(myidx==nprocx-1) lboundary(2) = .true.
@@ -90,9 +92,7 @@ contains
     if(dyint == -1.) dxint = real(jtot)*dy ! Set dyint to entire width as default
     nxpatch = int(dx/dxint*real(itot));
     nypatch = int(dy/dyint*real(jtot));
-    if(mod(dxint,dx)/=0 .or. mod(dyint,dy)/=0) then
-      stop 'dxint and dyint should be multiples of dx and dy respectively.'
-    endif
+    if(mod(dxint,dx)/=0 .or. mod(dyint,dy)/=0) stop 'dxint and dyint should be multiples of dx and dy respectively.'
     ! For now vertical integration scale is set equal to dz
     nzpatch = kmax
     boundary(1)%nx1patch = nypatch; boundary(1)%nx2patch = nzpatch

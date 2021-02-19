@@ -205,6 +205,7 @@ contains
     do j=2,j1
       do i=2,i1
         pwp(i,j,1)  = 0.
+        pwp(i,j,k1) = wp(i,j,k1) + wm(i,j,k1) / rk3coef
         !pwp(i,j,k1) = 0.
       end do
     end do

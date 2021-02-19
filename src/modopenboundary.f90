@@ -39,7 +39,7 @@
 !  Copyright 1993-2009 Delft University of Technology, Wageningen University, Utrecht University, KNMI
 !
 module modopenboundary
-use modglobal, only : boundary_type,boundary,lopenbc,lboundary,lperiodic,lsynturb,dzint,dxint,dyint,ntboundary,tboundary
+use modglobal, only : boundary_type,boundary,lopenbc,lboundary,lperiodic,lsynturb,dzint,dxint,dyint,ntboundary,tboundary,tau0
 use netcdf
 implicit none
 integer :: nxpatch, nypatch, nzpatch
@@ -827,9 +827,8 @@ contains
     real, intent(inout), dimension(sx-ih:ex+ih,sy-jh:ey+jh,sz:ez) :: a
     real, dimension(nx1,nx2) :: turb
     integer :: i,j,k,itp,itm,kav=5,itpn,itmn
-    real :: coefdir,coefneu,valcurrent,uwallcurrent,tp,tm,fp,fm,tau0,temp,factor,dtheta,valnext,fpn,fmn,ub,ddz,valtarget
+    real :: coefdir,coefneu,tp,tm,fp,fm,fpn,fmn,ddz,valtarget,un,e
 
-    tau0 = 60.
     ! Check if turbulent pertubations need to be added
     if(present(turbin)) then
       turb = turbin
@@ -859,13 +858,15 @@ contains
     case(1) ! West
       do k = 1,nx2
         do j = 1,nx1
-          if(u0(sx,min(j+1,j1),min(k,kmax))<=0) then ! Homogeneous Neumann outflow
+          un = u0(sx,min(j+1,j1),min(k,kmax))
+          if(un<=0) then ! Homogeneous Neumann outflow
             a(sx-1,j+1,k)=a(sx,j+1,k)
           else ! Robin inflow conditions
+            e = e120(sx,min(j+1,j1),min(k,kmax))
             coefdir = 1.
-            coefneu = -u0(sx,j+1,k)*tau0-e120(sx,j+1,k)/u0(sx,j+1,k)*dx
-            valtarget = fp*val(j,k,itp)+fm*val(j,k,itm)
-            a(sx-1,j+1,k) = ( 2.*dx*(valtarget+turb(j,k)) - &
+            coefneu = -un*tau0-e/un*dx
+            valtarget = fp*val(j,k,itp)+fm*val(j,k,itm)+turb(j,k)
+            a(sx-1,j+1,k) = ( 2.*dx*valtarget - &
               a(sx,j+1,k)*(coefdir*dx+2.*coefneu) ) / (coefdir*dx-2.*coefneu)
           endif
         end do
@@ -873,13 +874,15 @@ contains
     case(2) ! East
       do k = 1,nx2
         do j = 1,nx1
-          if(u0(ex+1,min(j+1,j1),min(k,kmax))>=0) then ! Homogeneous Neumann outflow
+          un = u0(ex+1,min(j+1,j1),min(k,kmax))
+          if(un>=0) then ! Homogeneous Neumann outflow
             a(ex+1,j+1,k)=a(ex,j+1,k)
           else ! Robin or Dirichlet inflow conditions
+            e = e120(ex,min(j+1,j1),min(k,kmax))
             coefdir = 1.
-            coefneu = -u0(ex+1,j+1,k)*tau0-e120(ex,j+1,k)/u0(ex+1,j+1,k)*dx
-            valtarget = fp*val(j,k,itp)+fm*val(j,k,itm)
-            a(ex+1,j+1,k) = ( 2.*dx*(valtarget+turb(j,k)) - &
+            coefneu = -un*tau0-e/un*dx
+            valtarget = fp*val(j,k,itp)+fm*val(j,k,itm)+turb(j,k)
+            a(ex+1,j+1,k) = ( 2.*dx*valtarget - &
               a(ex,j+1,k)*(coefdir*dx-2.*coefneu) ) / (coefdir*dx+2.*coefneu)
           endif
         end do
@@ -887,13 +890,15 @@ contains
     case(3) ! South
       do k = 1,nx2
         do i = 1,nx1
-          if(v0(min(i+1,i1),sy,min(k,kmax))<=0) then ! Homogeneous Neumann outflow
+          un = v0(min(i+1,i1),sy,min(k,kmax))
+          if(un<=0) then ! Homogeneous Neumann outflow
             a(i+1,sy-1,k)=a(i+1,sy,k)
           else ! Robin or Dirichlet inflow conditions
+            e = e120(min(i+1,i1),sy,min(k,kmax))
             coefdir = 1.
-            coefneu = -v0(i+1,sy,k)*tau0-e120(i+1,sy,k)/v0(i+1,sy,k)*dy
-            valtarget = fp*val(i,k,itp)+fm*val(i,k,itm)
-            a(i+1,sy-1,k) = ( 2.*dy*(valtarget+turb(i,k)) - &
+            coefneu = -un*tau0-e/un*dy
+            valtarget = fp*val(i,k,itp)+fm*val(i,k,itm)+turb(i,k)
+            a(i+1,sy-1,k) = ( 2.*dy*valtarget - &
               a(i+1,sy,k)*(coefdir*dy+2.*coefneu) ) / (coefdir*dy-2.*coefneu)
           endif
         end do
@@ -901,13 +906,15 @@ contains
     case(4) ! North
       do k = 1,nx2
         do i = 1,nx1
-          if(v0(min(i+1,i1),ey+1,min(k,kmax))>=0) then ! Homogeneous Neumann outflow
+          un = v0(min(i+1,i1),ey+1,min(k,kmax))
+          if(un>=0) then ! Homogeneous Neumann outflow
             a(i+1,ey+1,k)=a(i+1,ey,k)
           else ! Robin or Dirichlet inflow conditions
+            e = e120(min(i+1,i1),ey,min(k,kmax))
             coefdir = 1.
-            coefneu = -v0(i+1,ey+1,k)*tau0-e120(i+1,ey,k)/v0(i+1,ey+1,k)*dy
-            valtarget = fp*val(i,k,itp)+fm*val(i,k,itm)
-            a(i+1,ey+1,k) = ( 2.*dy*(valtarget+turb(i,k)) - &
+            coefneu = -un*tau0-e/un*dy
+            valtarget = fp*val(i,k,itp)+fm*val(i,k,itm)+turb(i,k)
+            a(i+1,ey+1,k) = ( 2.*dy*valtarget - &
               a(i+1,ey,k)*(coefdir*dy-2.*coefneu) ) / (coefdir*dy+2.*coefneu)
           endif
         end do
@@ -922,14 +929,15 @@ contains
       endif
       do i = 1,nx1
         do j = 1,nx2
-          if(w0(min(i+1,i1),min(j+1,j1),ez)>=0) then ! Neumann outflow
+          un = w0(min(i+1,i1),min(j+1,j1),ez)
+          if(un>=0) then ! Neumann outflow
             a(i+1,j+1,ez)=ddz*dzh(ez)+a(i+1,j+1,ez-1)
           else ! Robin inflow conditions
+            e = e120(min(i+1,i1),min(j+1,j1),ez-1)
             coefdir = 1.
-            coefneu = -w0(i+1,j+1,ez)*tau0-e120(i+1,j+1,ez-1)/w0(i+1,j+1,ez)*dzh(ez)
-            valtarget = fp*val(i,j,itp)+fm*val(i,j,itm) - &
-              (w0(i+1,j+1,ez)*tau0+e120(i+1,j+1,ez-1)/w0(i+1,j+1,ez)*dzh(ez))*ddz
-            a(i+1,j+1,ez) = ( 2.*dzh(ez)*(valtarget+turb(i,j)) - &
+            coefneu = -un*tau0-e/un*dzh(ez)
+            valtarget = fp*val(i,j,itp)+fm*val(i,j,itm)+turb(i,j)-(un*tau0+e/un*dzh(ez))*ddz
+            a(i+1,j+1,ez) = ( 2.*dzh(ez)*valtarget - &
               a(i+1,j+1,ez-1)*(coefdir*dzh(ez)-2.*coefneu) ) / (coefdir*dzh(ez)+2.*coefneu)
           endif
         end do

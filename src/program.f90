@@ -152,6 +152,9 @@ program DALES
   use modcanopy,       only : initcanopy, canopy, exitcanopy
   use modopenboundary, only : openboundary_ghost,openboundary_tend,openboundary_phasevelocity,openboundary_turb
 
+  use modfields,       only : up,vp,wp
+  use modglobal,       only : i1,i2,j1,j2,kmax,k1
+
 
   implicit none
   real :: rdtold=10
@@ -203,10 +206,10 @@ program DALES
 
   do while (timeleft>0 .or. rk3step < 3)
     call tstep_update                          ! Calculate new timestep
-    if(rtimee>10..and.rdt+rdtold<2..and.rk3step==1) then ! Fail save when waves build up to big remove after testing
-      print *, 'exited prematurely, rdt = ',rdtold,rdt,'s rtimee = ',rtimee,'s'
-      exit
-    endif
+    !if(rtimee>10..and.rdt+rdtold<0.5.and.rk3step==1) then ! Fail save when waves build up to big remove after testing
+    !  print *, 'exited prematurely, rdt = ',rdtold,rdt,'s rtimee = ',rtimee,'s'
+    !  exit
+    !endif
     call timedep
     call samptend(tend_start,firstterm=.true.)
 
@@ -270,7 +273,6 @@ program DALES
     call samptend(tend_topbound)
     call poisson
     call samptend(tend_pois,lastterm=.true.)
-
     call tstep_integrate                        ! Apply tendencies to all variables
     if(lopenbc) then
       call openboundary_ghost
@@ -312,7 +314,7 @@ program DALES
 
     call testwctime
     call writerestartfiles
-
+    !if(rk3step==3) rdtold=rdt
   end do
 
 !-------------------------------------------------------

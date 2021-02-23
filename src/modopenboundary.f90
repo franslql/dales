@@ -144,8 +144,8 @@ contains
 
   subroutine openboundary_readboundary
     use mpi
-    use modglobal, only : dzf,kmax,cexpnr,imax,jmax,itot,jtot,k1,ntboundary,tboundary,dzh,dx,dy
-    use modfields, only : rhobf,rhobh,uprof,vprof,thlprof,qtprof,e12prof
+    use modglobal, only : dzf,kmax,cexpnr,imax,jmax,itot,jtot,k1,ntboundary,tboundary,dzh,dx,dy,i1,j1,i2,j2,kmax
+    use modfields, only : rhobf,rhobh,uprof,vprof,thlprof,qtprof,e12prof,u0,um,v0,vm,w0,wm
     use modmpi, only : myid,comm3d,myidy,myidx,MY_REAL
     implicit none
     integer :: it,i,j,k,ib,sy,sx,ey,ex
@@ -394,6 +394,12 @@ contains
       boundary(1)%thl = thlwest(sy:ey,:,:)
       boundary(1)%qt = qtwest(sy:ey,:,:)
       boundary(1)%e12 = e12west(sy:ey,:,:)
+      do j = 2,j1
+        do k = 1,kmax
+          u0(2,j,k) = boundary(1)%u(1,j-1,k)
+          um(2,j,k) = boundary(1)%u(1,j-1,k)
+        end do
+      end do
     endif
     if(lboundary(2).and..not.lperiodic(2)) then
       sy = myidy*jmax+1
@@ -404,6 +410,12 @@ contains
       boundary(2)%thl = thleast(sy:ey,:,:)
       boundary(2)%qt = qteast(sy:ey,:,:)
       boundary(2)%e12 = e12east(sy:ey,:,:)
+      do j = 2,j1
+        do k = 1,kmax
+          u0(i2,j,k) = boundary(2)%u(1,j-1,k)
+          um(i2,j,k) = boundary(2)%u(1,j-1,k)
+        end do
+      end do
     endif
     if(lboundary(3).and..not.lperiodic(3)) then
       sx = myidx*imax+1
@@ -414,6 +426,12 @@ contains
       boundary(3)%thl = thlsouth(sx:ex,:,:)
       boundary(3)%qt = qtsouth(sx:ex,:,:)
       boundary(3)%e12 = e12south(sx:ex,:,:)
+      do i = 2,i1
+        do k = 1,kmax
+          v0(i,2,k) = boundary(3)%v(1,i-1,k)
+          vm(i,2,k) = boundary(3)%v(1,i-1,k)
+        end do
+      end do
     endif
     if(lboundary(4).and..not.lperiodic(4)) then
       sx = myidx*imax+1
@@ -424,6 +442,12 @@ contains
       boundary(4)%thl = thlnorth(sx:ex,:,:)
       boundary(4)%qt = qtnorth(sx:ex,:,:)
       boundary(4)%e12 = e12north(sx:ex,:,:)
+      do i = 2,i1
+        do k = 1,kmax
+          v0(i,j2,1:k) = boundary(4)%v(1,i-1,k)
+          vm(i,j2,1:k) = boundary(4)%v(1,i-1,k)
+        end do
+      end do
     endif
     if(lboundary(5).and..not.lperiodic(5)) then
       sx = myidx*imax+1
@@ -436,6 +460,12 @@ contains
       boundary(5)%thl = thltop(sx:ex,sy:ey,:)
       boundary(5)%qt = qttop(sx:ex,sy:ey,:)
       boundary(5)%e12 = e12top(sx:ex,sy:ey,:)
+      do i = 2,i1
+        do j = 2,j1
+          w0(i,j,k1) = boundary(5)%w(1,i-1,j-1)
+          wm(i,j,k1) = boundary(5)%w(1,i-1,j-1)
+        end do
+      end do
     endif
     allocate(rhointi(k1))
     rhointi = 1./(rhobf*dzf)

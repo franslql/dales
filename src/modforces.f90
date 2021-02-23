@@ -145,11 +145,11 @@ contains
 !                                                                 |
 !-----------------------------------------------------------------|
 
-  use modglobal, only : i1,j1,kmax,dzh,dzf,cu,cv,om22,om23,lcoriol
+  use modglobal, only : i1,j1,kmax,dzh,dzf,cu,cv,om22,om23,lcoriol,lopenbc,lboundary,lperiodic
   use modfields, only : u0,v0,w0,up,vp,wp
   implicit none
 
-  integer i, j, k,im,ip, jm, jp, km, kp,sx=2,sy=2
+  integer :: i, j, k,im,ip, jm, jp, km, kp,sx=2,sy=2
 
   if (lcoriol .eqv. .false.) return
   ! Only calculate interior tendencies when open boundaries are used

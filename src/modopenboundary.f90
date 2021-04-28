@@ -59,7 +59,7 @@ contains
 
     if(.not.lopenbc) return
     ! Check if hypre solver is selected
-    if(solver_id == 0 .or. solver_id == 100) stop 'Openboundaries only possible with HYPRE pressure solver, change solver_id to 1'
+    if(solver_id /= 1) stop 'Openboundaries only possible with HYPRE pressure solver, change solver_id to 1'
     ! Check if boundary is present on process
     if(myidx==0)        lboundary(1) = .true.
     if(myidx==nprocx-1) lboundary(2) = .true.
@@ -92,9 +92,8 @@ contains
     if(dyint == -1.) dxint = real(jtot)*dy ! Set dyint to entire width as default
     nxpatch = int(dx/dxint*real(itot));
     nypatch = int(dy/dyint*real(jtot));
+    nzpatch = kmax ! For now vertical integration scale is set equal to dz
     if(mod(dxint,dx)/=0 .or. mod(dyint,dy)/=0) stop 'dxint and dyint should be multiples of dx and dy respectively.'
-    ! For now vertical integration scale is set equal to dz
-    nzpatch = kmax
     boundary(1)%nx1patch = nypatch; boundary(1)%nx2patch = nzpatch
     boundary(2)%nx1patch = nypatch; boundary(2)%nx2patch = nzpatch
     boundary(3)%nx1patch = nxpatch; boundary(3)%nx2patch = nzpatch
@@ -102,7 +101,7 @@ contains
     boundary(5)%nx1patch = nxpatch; boundary(5)%nx2patch = nypatch
     ! Allocate phase velocity and correction term radiation boundaries
     do i = 1,5
-      if(.not.lboundary(i) .or. lperiodic(i)) cycle
+      if(.not.lboundary(i) .or. lperiodic(i)) cycle ! Open boundary not present
       allocate(boundary(i)%radcorr(boundary(i)%nx1patch,boundary(i)%nx2patch), &
         boundary(i)%radcorrsingle(boundary(i)%nx1patch,boundary(i)%nx2patch), &
         boundary(i)%uphase(boundary(i)%nx1,boundary(i)%nx2), &
@@ -119,7 +118,7 @@ contains
           boundary(i)%wturb(boundary(i)%nx1w,boundary(i)%nx2w), &
           boundary(i)%turbpar(boundary(i)%nx1patch,boundary(i)%nx2patch))
       end do
-      if(any(lboundary)) allocate(uturbtemp(nx1max,nx2max), &
+      if(any(lboundary)) allocate(uturbtemp(nx1max,nx2max), & ! CHECK TOP BOUNDARY COULD NOT BE PRESENT
         vturbtemp(nx1max,nx2max),wturbtemp(nx1max,nx2max))
     endif
   end subroutine initopenboundary
@@ -174,7 +173,7 @@ contains
     allocate(tboundary(ntboundary),sumdiv(ntboundary))
     ! Allocate boundary fields for prognostic variables
     do i = 1,5
-      if(.not.lboundary(i) .or. lperiodic(i)) cycle
+      if(.not.lboundary(i) .or. lperiodic(i)) cycle ! Open boundary not present
       allocate(boundary(i)%thl(boundary(i)%nx1,boundary(i)%nx2,ntboundary), &
         boundary(i)%qt(boundary(i)%nx1,boundary(i)%nx2,ntboundary),  &
         boundary(i)%e12(boundary(i)%nx1,boundary(i)%nx2,ntboundary), &
@@ -350,6 +349,7 @@ contains
           end do
         end do
         sumdiv(it) = sumeast-sumwest+sumnorth-sumsouth+sumtop
+        ! Any divergence is compensated at the top boundary
         wtop(:,:,it)=wtop(:,:,it)-sumdiv(it)/(rhobh(k1)*xsize*ysize)
         sumtop = 0. ! Check if divergence is close to zero now
         do i = 1,itot
@@ -596,7 +596,7 @@ contains
           jpos = j + (myidy * jmax) - 1
           jpatch = int((jpos-0.5)*dy/dyint)+1
           do k = 1,kmax
-            kpatch = kmax
+            kpatch = k
             boundary(1)%uphasesingle(jpatch,kpatch) = boundary(1)%uphasesingle(jpatch,kpatch) + &
               (-up(3,j+1,k)*dx/sign(max(abs(u0(4,j+1,k)-u0(3,j+1,k)),1e-10),u0(4,j+1,k)-u0(3,j+1,k))) &
               *dy*rhobf(k)*dzf(k)/dyint*rhointi(kpatch)
@@ -611,7 +611,7 @@ contains
           jpos = j + (myidy * jmax) - 1
           jpatch = int((jpos-0.5)*dy/dyint)+1
           do k = 1,kmax
-            kpatch = kmax
+            kpatch = k
             boundary(2)%uphasesingle(jpatch,kpatch) = boundary(2)%uphasesingle(jpatch,kpatch) + &
               (-up(i1,j+1,k)*dx/sign(max(abs(u0(i1,j+1,k)-u0(i1-1,j+1,k)),1e-10),u0(i1,j+1,k)-u0(i1-1,j+1,k))) &
               *dy*rhobf(k)*dzf(k)/dyint*rhointi(kpatch)

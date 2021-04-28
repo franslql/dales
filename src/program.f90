@@ -152,12 +152,13 @@ program DALES
   use modcanopy,       only : initcanopy, canopy, exitcanopy
   use modopenboundary, only : openboundary_ghost,openboundary_tend,openboundary_phasevelocity,openboundary_turb
 
-  use modfields,       only : up,vp,wp
+  use modfields,       only : up,vp,wp,wm,w0
   use modglobal,       only : i1,i2,j1,j2,kmax,k1
 
 
   implicit none
-  real :: rdtold=10
+  real :: rdtold=10,wsum=0.
+  integer :: i,j
 
 !----------------------------------------------------------------
 !     1      READ NAMELISTS,INITIALISE GRID, CONSTANTS AND FIELDS

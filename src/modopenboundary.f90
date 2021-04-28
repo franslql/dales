@@ -144,7 +144,8 @@ contains
 
   subroutine openboundary_readboundary
     use mpi
-    use modglobal, only : dzf,kmax,cexpnr,imax,jmax,itot,jtot,k1,ntboundary,tboundary,dzh,dx,dy,i1,j1,i2,j2,kmax
+    use modglobal, only : dzf,kmax,cexpnr,imax,jmax,itot,jtot,k1,ntboundary, &
+      tboundary,dzh,dx,dy,i1,j1,i2,j2,kmax,xsize,ysize,zh
     use modfields, only : rhobf,rhobh,uprof,vprof,thlprof,qtprof,e12prof,u0,um,v0,vm,w0,wm
     use modmpi, only : myid,comm3d,myidy,myidx,MY_REAL
     implicit none
@@ -331,27 +332,37 @@ contains
       if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
     ! Check divergence of data
       sumdiv = 0.
+      sumdivtot = 0.
       do it = 1,ntboundary
-        do i = 1,imax
-          do j = 1,jmax
+        do i = 1,itot
+          do j = 1,jtot
             sumtop = sumtop + rhobh(k1)*wtop(i,j,it)*dx*dy
           end do
         end do
         do k = 1,kmax
-          do j = 1,jmax
+          do j = 1,jtot
             sumwest = sumwest + rhobf(k)*uwest(j,k,it)*dzf(k)*dy
             sumeast = sumeast + rhobf(k)*ueast(j,k,it)*dzf(k)*dy
           end do
-          do i = 1,imax
+          do i = 1,itot
             sumsouth = sumsouth + rhobf(k)*vsouth(i,k,it)*dzf(k)*dx
             sumnorth = sumnorth + rhobf(k)*vnorth(i,k,it)*dzf(k)*dx
+          end do
+        end do
+        sumdiv(it) = sumeast-sumwest+sumnorth-sumsouth+sumtop
+        wtop(:,:,it)=wtop(:,:,it)-sumdiv(it)/(rhobh(k1)*xsize*ysize)
+        sumtop = 0. ! Check if divergence is close to zero now
+        do i = 1,itot
+          do j = 1,jtot
+            sumtop = sumtop + rhobh(k1)*wtop(i,j,it)*dx*dy
           end do
         end do
         sumdiv(it) = sumeast-sumwest+sumnorth-sumsouth+sumtop
         sumdivtot = sumdivtot+sumdiv(it)
         sumwest = 0.;sumeast=0.;sumsouth=0.;sumnorth=0.;sumtop=0.
       end do
-      print *, "Total and max integrated divergence of boundary input data kg/s ",sumdivtot,maxval(sumdiv)
+      print *, "Mean and max integrated divergence of boundary input data kg/(m^3*s), correction added to top boundary ", &
+        sumdivtot/(xsize*ysize*zh(k1)*ntboundary),maxval(sumdiv)/(xsize*ysize*zh(k1))
     endif
     ! Distribute data
     call MPI_BCAST(uwest,jtot*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
@@ -396,8 +407,8 @@ contains
       boundary(1)%e12 = e12west(sy:ey,:,:)
       do j = 2,j1
         do k = 1,kmax
-          u0(2,j,k) = boundary(1)%u(1,j-1,k)
-          um(2,j,k) = boundary(1)%u(1,j-1,k)
+          u0(2,j,k) = boundary(1)%u(j-1,k,1)
+          um(2,j,k) = boundary(1)%u(j-1,k,1)
         end do
       end do
     endif
@@ -412,8 +423,8 @@ contains
       boundary(2)%e12 = e12east(sy:ey,:,:)
       do j = 2,j1
         do k = 1,kmax
-          u0(i2,j,k) = boundary(2)%u(1,j-1,k)
-          um(i2,j,k) = boundary(2)%u(1,j-1,k)
+          u0(i2,j,k) = boundary(2)%u(j-1,k,1)
+          um(i2,j,k) = boundary(2)%u(j-1,k,1)
         end do
       end do
     endif
@@ -428,8 +439,8 @@ contains
       boundary(3)%e12 = e12south(sx:ex,:,:)
       do i = 2,i1
         do k = 1,kmax
-          v0(i,2,k) = boundary(3)%v(1,i-1,k)
-          vm(i,2,k) = boundary(3)%v(1,i-1,k)
+          v0(i,2,k) = boundary(3)%v(i-1,k,1)
+          vm(i,2,k) = boundary(3)%v(i-1,k,1)
         end do
       end do
     endif
@@ -444,8 +455,8 @@ contains
       boundary(4)%e12 = e12north(sx:ex,:,:)
       do i = 2,i1
         do k = 1,kmax
-          v0(i,j2,1:k) = boundary(4)%v(1,i-1,k)
-          vm(i,j2,1:k) = boundary(4)%v(1,i-1,k)
+          v0(i,j2,1:k) = boundary(4)%v(i-1,k,1)
+          vm(i,j2,1:k) = boundary(4)%v(i-1,k,1)
         end do
       end do
     endif
@@ -462,8 +473,8 @@ contains
       boundary(5)%e12 = e12top(sx:ex,sy:ey,:)
       do i = 2,i1
         do j = 2,j1
-          w0(i,j,k1) = boundary(5)%w(1,i-1,j-1)
-          wm(i,j,k1) = boundary(5)%w(1,i-1,j-1)
+          w0(i,j,k1) = boundary(5)%w(i-1,j-1,1)
+          wm(i,j,k1) = boundary(5)%w(i-1,j-1,1)
         end do
       end do
     endif

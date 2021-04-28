@@ -650,7 +650,6 @@ contains
       else
         call boundary
       endif
-      call boundary
       call thermodynamics
       call surface
 

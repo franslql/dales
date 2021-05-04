@@ -60,7 +60,7 @@ contains
                                   lmoist,lcoriol,lpressgrad,igrw_damp,geodamptime,lmomsubs,cu, cv,ifnamopt,fname_options,llsadv,&
                                   ibas_prf,lambda_crit,iadv_mom,iadv_tke,iadv_thl,iadv_qt,iadv_sv,courant,peclet,ladaptive,author,lnoclouds,lrigidlid,unudge,ntimedep, &
                                   solver_id, maxiter, tolerance, n_pre, n_post, precond, checknamelisterror, &
-                                  lopenbc,lperiodic,dxint,dyint,dzint,tau0,lsynturb,isynturb,nmodes,nfreq,tau,lambda,lambda_x,lambda_y,lambda_z
+                                  lopenbc,lperiodic,dxint,dyint,dzint,lsynturb,tau0,nmodes,tau,lambda
     use modforces,         only : lforce_user
     use modsurfdata,       only : z0,ustin,wtsurf,wqsurf,wsvsurf,ps,thls,isurf
     use modsurface,        only : initsurface
@@ -108,7 +108,7 @@ contains
     namelist/SOLVER/ &
         solver_id, maxiter, tolerance, n_pre, n_post, precond
     namelist/OPENBC/ &
-        lopenbc,dxint,dyint,dzint,tau0,lper,lsynturb,isynturb,lambda,tau,nmodes,nfreq,lambda_x,lambda_y,lambda_z
+        lopenbc,dxint,dyint,dzint,tau0,lper,lsynturb,lambda,tau,nmodes
 
 
     ! get myid
@@ -278,14 +278,9 @@ contains
     call MPI_BCAST(tau0,1,MY_REAL   ,0,commwrld,mpierr)
     call MPI_BCAST(lperiodic,5,MPI_LOGICAL,0,commwrld,mpierr)
     call MPI_BCAST(lsynturb,1,MPI_LOGICAL,0,commwrld,mpierr)
-    call MPI_BCAST(isynturb,1,MPI_INTEGER,0,commwrld,mpierr)
     call MPI_BCAST(lambda,1,MY_REAL   ,0,commwrld,mpierr)
-    call MPI_BCAST(lambda_x,1,MY_REAL   ,0,commwrld,mpierr)
-    call MPI_BCAST(lambda_y,1,MY_REAL   ,0,commwrld,mpierr)
-    call MPI_BCAST(lambda_z,1,MY_REAL   ,0,commwrld,mpierr)
     call MPI_BCAST(tau,1,MY_REAL   ,0,commwrld,mpierr)
     call MPI_BCAST(nmodes,1,MPI_INTEGER   ,0,commwrld,mpierr)
-    call MPI_BCAST(nfreq,1,MPI_INTEGER   ,0,commwrld,mpierr)
 
     call testwctime
     ! Allocate and initialize core modules

@@ -40,6 +40,7 @@
 !
 module modopenboundary
 use modglobal, only : boundary_type,boundary,lopenbc,lboundary,lperiodic,lsynturb,dzint,dxint,dyint,ntboundary,tboundary,tau0
+use modsynturb, only : synturb,initsynturb,exitsynturb
 use netcdf
 implicit none
 integer :: nxpatch, nypatch, nzpatch
@@ -66,6 +67,12 @@ contains
     if(myidy==0)        lboundary(3) = .true.
     if(myidy==nprocy-1) lboundary(4) = .true.
     lboundary(5) = .true.
+    ! Set boundary names
+    allocate(boundary(1)%name(4)); boundary(1)%name = 'west'
+    allocate(boundary(2)%name(4)); boundary(2)%name = 'east'
+    allocate(boundary(3)%name(5)); boundary(3)%name = 'south'
+    allocate(boundary(4)%name(5)); boundary(4)%name = 'north'
+    allocate(boundary(5)%name(3)); boundary(5)%name = 'top'
     ! Set dimension for each boundary
     boundary(1)%nx1  = jmax; boundary(1)%nx2  = kmax
     boundary(2)%nx1  = jmax; boundary(2)%nx2  = kmax
@@ -105,22 +112,16 @@ contains
       allocate(boundary(i)%radcorr(boundary(i)%nx1patch,boundary(i)%nx2patch), &
         boundary(i)%radcorrsingle(boundary(i)%nx1patch,boundary(i)%nx2patch), &
         boundary(i)%uphase(boundary(i)%nx1,boundary(i)%nx2), &
-        boundary(i)%uphasesingle(boundary(i)%nx1,boundary(i)%nx2))
+        boundary(i)%uphasesingle(boundary(i)%nx1,boundary(i)%nx2), &
+        boundary(i)%uturb(boundary(i)%nx1u,boundary(i)%nx2u), &
+        boundary(i)%vturb(boundary(i)%nx1v,boundary(i)%nx2v), &
+        boundary(i)%wturb(boundary(i)%nx1w,boundary(i)%nx2w), &
+        boundary(i)%thlturb(boundary(i)%nx1,boundary(i)%nx2), &
+        boundary(i)%qtturb(boundary(i)%nx1,boundary(i)%nx2))
+        boundary(i)%uturb = 0.; boundary(i)%vturb = 0.; boundary(i)%wturb = 0.
+        boundary(i)%thlturb = 0.; boundary(i)%qtturb = 0.
     end do
-    ! Allocate turbulent pertubation fields
-    if(lsynturb) then
-      nx1max = max(i1,j1)
-      nx2max = max(j1,k1)
-      do i = 1,5
-        if(.not.lboundary(i) .or. lperiodic(i)) cycle
-        allocate(boundary(i)%uturb(boundary(i)%nx1u,boundary(i)%nx2u), &
-          boundary(i)%vturb(boundary(i)%nx1v,boundary(i)%nx2v), &
-          boundary(i)%wturb(boundary(i)%nx1w,boundary(i)%nx2w), &
-          boundary(i)%turbpar(boundary(i)%nx1patch,boundary(i)%nx2patch))
-      end do
-      if(any(lboundary)) allocate(uturbtemp(nx1max,nx2max), & ! CHECK TOP BOUNDARY COULD NOT BE PRESENT
-        vturbtemp(nx1max,nx2max),wturbtemp(nx1max,nx2max))
-    endif
+    call initsynturb
   end subroutine initopenboundary
 
   subroutine exitopenboundary
@@ -133,12 +134,11 @@ contains
       if(.not.lboundary(i) .or. lperiodic(i)) cycle
       deallocate(boundary(i)%thl,boundary(i)%qt,boundary(i)%e12, &
         boundary(i)%u,boundary(i)%v,boundary(i)%w,boundary(i)%uphasesingle,boundary(i)%uphase, &
-        boundary(i)%radcorr,boundary(i)%radcorrsingle)
-      if(lsynturb) deallocate(boundary(i)%uturb,boundary(i)%vturb, &
-        boundary(i)%wturb,boundary(i)%turbpar)
+        boundary(i)%radcorr,boundary(i)%radcorrsingle,boundary(i)%uturb,boundary(i)%vturb, &
+          boundary(i)%wturb,boundary(i)%thlturb,boundary(i)%qtturb,boundary(i)%name)
     end do
-    if(lsynturb.and.any(lboundary)) deallocate(uturbtemp,vturbtemp,wturbtemp)
     deallocate(rhointi)
+    call exitsynturb
   end subroutine exitopenboundary
 
   subroutine openboundary_readboundary
@@ -181,6 +181,18 @@ contains
         boundary(i)%v(boundary(i)%nx1v,boundary(i)%nx2v,ntboundary), &
         boundary(i)%w(boundary(i)%nx1w,boundary(i)%nx2w,ntboundary), &
         )
+      if(lsynturb) then ! Allocate turbulent fields
+        allocate(boundary(ib)%u2(boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary), &
+        & boundary(ib)%v2(boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary), &
+        & boundary(ib)%w2(boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary), &
+        & boundary(ib)%uv(boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary), &
+        & boundary(ib)%uw(boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary), &
+        & boundary(ib)%vw(boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary), &
+        & boundary(ib)%thl2(boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary),&
+        & boundary(ib)%qt2(boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary), &
+        & boundary(ib)%wthl(boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary), &
+        & boundary(ib)%wqt(boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary))
+      endif
     end do
     ! Allocate fields for input
     allocate(uwest(jtot,kmax,ntboundary),vwest(jtot+1,kmax,ntboundary),wwest(jtot,k1,ntboundary), &
@@ -363,6 +375,10 @@ contains
       end do
       print *, "Mean and max integrated divergence of boundary input data kg/(m^3*s), correction added to top boundary ", &
         sumdivtot/(xsize*ysize*zh(k1)*ntboundary),maxval(sumdiv)/(xsize*ysize*zh(k1))
+    endif
+    if(myid==0) then
+      status = nf90_close(ncid)
+      if (status /= nf90_noerr) call handle_err(status)
     endif
     ! Distribute data
     call MPI_BCAST(uwest,jtot*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
@@ -673,18 +689,9 @@ contains
   subroutine openboundary_turb
     ! Subroutine that calls the synthetic turbulence routine for the generation
     ! of synthetic turbulence at the dirichlet inflow boundaries.
-    !use modglobal, only : rtimee,rk3step,rdt
-    !use modsynturb, only : synturb
-    !implicit none
-    !integer :: i
-    !if(.not.lsynturb .or. .not. lopenbc .or. rk3step/=1) return
-    !do i = 1,5
-    !  if(.not.(lboundary(i)).or.lperiodic(i)) cycle
-    !  call synturb(i,rtimee,uturbtemp,vturbtemp,wturbtemp,nx1max,nx2max)
-    !  boundary(i)%uturb = uturbtemp(1:boundary(i)%nx1u,1:boundary(i)%nx2u)
-    !  boundary(i)%vturb = vturbtemp(1:boundary(i)%nx1v,1:boundary(i)%nx2v)
-    !  boundary(i)%wturb = wturbtemp(1:boundary(i)%nx1w,1:boundary(i)%nx2w)
-    !end do
+    use modglobal, only : rk3step
+    implicit none
+    if(rk3step == 1) call synturb()
   end subroutine openboundary_turb
 
   subroutine openboundary_excjs(a,sx,ex,sy,ey,sz,ez,ih,jh,switch)

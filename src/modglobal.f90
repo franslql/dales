@@ -200,25 +200,20 @@ save
 
       ! Variables for modopenboundary.f90
       logical :: lopenbc = .false., lsynturb = .false.
-      type turbpar_type
-        real(16),dimension(3,3) :: eigvec
-        real,dimension(3) :: eigval
-        real,dimension(3) :: ci
-        real,dimension(:,:,:), allocatable :: p,q,knorm
-        real,dimension(:,:), allocatable :: omega
-      end type
       type boundary_type
         integer :: nx1,nx2,nx1patch,nx2patch,nx1u,nx2u,nx1v,nx2v,nx1w,nx2w
-        real, allocatable, dimension(:,:,:) :: u,v,w,thl,qt,e12
+        real, allocatable, dimension(:,:,:) :: u,v,w,thl,qt,e12, &
+          & u2,v2,w2,uv,uw,vw,thl2,qt2,wthl,wqt,ci
         real, allocatable, dimension(:,:) :: radcorr,uphase,uphasesingle, &
-          radcorrsingle,uturb,vturb,wturb
-        type(turbpar_type), dimension(:,:), allocatable :: turbpar
+          radcorrsingle,uturb,vturb,wturb,thlturb,qtturb,randthl,randqt
+        real, allocatable, dimension(:,:,:,:) :: eigvec
+        character, allocatable, dimension(:) :: name
       end type
       type(boundary_type), dimension(5) :: boundary
       logical, dimension(5) :: lboundary = .false.
-      logical, dimension(5) :: lperiodic = (/.false.,.false.,.false.,.false.,.false./)
-      real :: dxint=-1.,dyint=-1.,dzint=-1.,tau0=60,lambda,tau,lambda_x=-1.,lambda_y=-1.,lambda_z=-1.
-      integer :: isynturb = 0,nmodes=100,nfreq=25,ntboundary=1
+      logical, dimension(5) :: lperiodic = .false.
+      real :: dxint=-1.,dyint=-1.,dzint=-1.,tau0=60,lambda,tau
+      integer :: nmodes=100,ntboundary=1
       real,dimension(:),allocatable :: tboundary
 
       ! modphsgrd.f90

@@ -205,9 +205,9 @@ save
         real, allocatable, dimension(:,:,:) :: u,v,w,thl,qt,e12, &
           & u2,v2,w2,uv,uw,vw,thl2,qt2,wthl,wqt,ci
         real, allocatable, dimension(:,:) :: radcorr,uphase,uphasesingle, &
-          radcorrsingle,uturb,vturb,wturb,thlturb,qtturb,randthl,randqt
+          radcorrsingle,uturb,vturb,wturb,thlturb,qtturb,e12turb
         real, allocatable, dimension(:,:,:,:) :: eigvec
-        character, allocatable, dimension(:) :: name
+        character (len=:), allocatable :: name
       end type
       type(boundary_type), dimension(5) :: boundary
       logical, dimension(5) :: lboundary = .false.

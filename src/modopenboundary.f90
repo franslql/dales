@@ -68,11 +68,11 @@ contains
     if(myidy==nprocy-1) lboundary(4) = .true.
     lboundary(5) = .true.
     ! Set boundary names
-    allocate(boundary(1)%name(4)); boundary(1)%name = 'west'
-    allocate(boundary(2)%name(4)); boundary(2)%name = 'east'
-    allocate(boundary(3)%name(5)); boundary(3)%name = 'south'
-    allocate(boundary(4)%name(5)); boundary(4)%name = 'north'
-    allocate(boundary(5)%name(3)); boundary(5)%name = 'top'
+    boundary(1)%name = "west"
+    boundary(2)%name = "east"
+    boundary(3)%name = "south"
+    boundary(4)%name = "north"
+    boundary(5)%name = "top"
     ! Set dimension for each boundary
     boundary(1)%nx1  = jmax; boundary(1)%nx2  = kmax
     boundary(2)%nx1  = jmax; boundary(2)%nx2  = kmax
@@ -117,9 +117,10 @@ contains
         boundary(i)%vturb(boundary(i)%nx1v,boundary(i)%nx2v), &
         boundary(i)%wturb(boundary(i)%nx1w,boundary(i)%nx2w), &
         boundary(i)%thlturb(boundary(i)%nx1,boundary(i)%nx2), &
-        boundary(i)%qtturb(boundary(i)%nx1,boundary(i)%nx2))
+        boundary(i)%qtturb(boundary(i)%nx1,boundary(i)%nx2), &
+        boundary(i)%e12turb(boundary(i)%nx1,boundary(i)%nx2))
         boundary(i)%uturb = 0.; boundary(i)%vturb = 0.; boundary(i)%wturb = 0.
-        boundary(i)%thlturb = 0.; boundary(i)%qtturb = 0.
+        boundary(i)%thlturb = 0.; boundary(i)%qtturb = 0.; boundary(i)%e12turb = 0.
     end do
     call initsynturb
   end subroutine initopenboundary
@@ -135,7 +136,7 @@ contains
       deallocate(boundary(i)%thl,boundary(i)%qt,boundary(i)%e12, &
         boundary(i)%u,boundary(i)%v,boundary(i)%w,boundary(i)%uphasesingle,boundary(i)%uphase, &
         boundary(i)%radcorr,boundary(i)%radcorrsingle,boundary(i)%uturb,boundary(i)%vturb, &
-          boundary(i)%wturb,boundary(i)%thlturb,boundary(i)%qtturb,boundary(i)%name)
+          boundary(i)%wturb,boundary(i)%thlturb,boundary(i)%qtturb,boundary(i)%name,boundary(i)%e12turb)
     end do
     deallocate(rhointi)
     call exitsynturb
@@ -146,40 +147,41 @@ contains
     use modglobal, only : dzf,kmax,cexpnr,imax,jmax,itot,jtot,k1,ntboundary, &
       tboundary,dzh,dx,dy,i1,j1,i2,j2,kmax,xsize,ysize,zh
     use modfields, only : rhobf,rhobh,uprof,vprof,thlprof,qtprof,e12prof,u0,um,v0,vm,w0,wm
-    use modmpi, only : myid,comm3d,myidy,myidx,MY_REAL
+    use modmpi, only : myid,comm3d,myidy,myidx,MY_REAL,nprocs
     implicit none
-    integer :: it,i,j,k,ib,sy,sx,ey,ex
+    integer :: it,i,j,k,ib,sy,sx,ey,ex,ip
     character(len = nf90_max_name) :: RecordDimName
     integer :: VARID,STATUS,NCID,mpierr,timeID
-    real :: sumwest=0.,sumeast=0.,sumsouth=0.,sumnorth=0.,sumtop=0.,sumdivtot=0.
-    real,dimension(:),allocatable :: sumdiv
-    real,dimension(:,:,:),allocatable :: uwest,ueast,usouth,unorth, &
-      & vwest,veast,vsouth,vnorth,wwest,weast,wsouth,wnorth, &
-      & thlwest,thleast,thlsouth,thlnorth,qtwest,qteast,qtsouth,qtnorth, &
-      & e12west,e12east,e12south,e12north,utop,vtop,wtop,thltop,qttop,e12top
+    integer, dimension(3) :: istart
+    real,dimension(:),allocatable :: sumdiv,sumdivtot
 
     if(.not.lopenbc) return
-    if(myid==0) then
-        !--- open nc file ---
-        STATUS = NF90_OPEN('openboundaries.inp.'//cexpnr//'.nc', nf90_nowrite, NCID)
-        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-        !--- get time dimensions
-        status = nf90_inq_dimid(ncid, "time", timeID)
-        if (status /= nf90_noerr) call handle_err(status)
-        status = nf90_inquire_dimension(NCID, timeID, len=ntboundary, name=RecordDimName)
-        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-    end if
-    call MPI_BCAST(ntboundary , 1,MPI_INTEGER,0,comm3d,mpierr)
-    allocate(tboundary(ntboundary),sumdiv(ntboundary))
-    ! Allocate boundary fields for prognostic variables
-    do i = 1,5
-      if(.not.lboundary(i) .or. lperiodic(i)) cycle ! Open boundary not present
-      allocate(boundary(i)%thl(boundary(i)%nx1,boundary(i)%nx2,ntboundary), &
-        boundary(i)%qt(boundary(i)%nx1,boundary(i)%nx2,ntboundary),  &
-        boundary(i)%e12(boundary(i)%nx1,boundary(i)%nx2,ntboundary), &
-        boundary(i)%u(boundary(i)%nx1u,boundary(i)%nx2u,ntboundary), &
-        boundary(i)%v(boundary(i)%nx1v,boundary(i)%nx2v,ntboundary), &
-        boundary(i)%w(boundary(i)%nx1w,boundary(i)%nx2w,ntboundary), &
+    do ip = 0,nprocs-1
+    call MPI_Barrier(comm3d,mpierr)
+    if(myid==ip) then ! Read netcdf file one by one
+    !--- open nc file ---
+    STATUS = NF90_OPEN('openboundaries.inp.'//cexpnr//'.nc', nf90_nowrite, NCID)
+    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+    !--- get time dimensions
+    status = nf90_inq_dimid(ncid, "time", timeID)
+    if (status /= nf90_noerr) call handle_err(status)
+    status = nf90_inquire_dimension(NCID, timeID, len=ntboundary, name=RecordDimName)
+    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+    !--- read time
+    allocate(tboundary(ntboundary))
+    STATUS = NF90_INQ_VARID(NCID, 'time', VARID)
+    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+    STATUS = NF90_GET_VAR (NCID, VARID, tboundary, start=(/1/), count=(/ntboundary/) )
+    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+    do ib = 1,5 ! loop over boundaries
+      ! Allocate fields
+      if(.not.lboundary(ib) .or. lperiodic(ib)) cycle ! Open boundary not present
+      allocate(boundary(ib)%thl(boundary(ib)%nx1,boundary(ib)%nx2,ntboundary), &
+        boundary(ib)%qt(boundary(ib)%nx1,boundary(ib)%nx2,ntboundary),  &
+        boundary(ib)%e12(boundary(ib)%nx1,boundary(ib)%nx2,ntboundary), &
+        boundary(ib)%u(boundary(ib)%nx1u,boundary(ib)%nx2u,ntboundary), &
+        boundary(ib)%v(boundary(ib)%nx1v,boundary(ib)%nx2v,ntboundary), &
+        boundary(ib)%w(boundary(ib)%nx1w,boundary(ib)%nx2w,ntboundary), &
         )
       if(lsynturb) then ! Allocate turbulent fields
         allocate(boundary(ib)%u2(boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary), &
@@ -193,234 +195,169 @@ contains
         & boundary(ib)%wthl(boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary), &
         & boundary(ib)%wqt(boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary))
       endif
-    end do
-    ! Allocate fields for input
-    allocate(uwest(jtot,kmax,ntboundary),vwest(jtot+1,kmax,ntboundary),wwest(jtot,k1,ntboundary), &
-      thlwest(jtot,kmax,ntboundary),qtwest(jtot,kmax,ntboundary),e12west(jtot,kmax,ntboundary), &
-      ueast(jtot,kmax,ntboundary),veast(jtot+1,kmax,ntboundary),weast(jtot,k1,ntboundary), &
-      thleast(jtot,kmax,ntboundary),qteast(jtot,kmax,ntboundary),e12east(jtot,kmax,ntboundary), &
-      usouth(itot+1,kmax,ntboundary),vsouth(itot,kmax,ntboundary),wsouth(itot,k1,ntboundary), &
-      thlsouth(itot,kmax,ntboundary),qtsouth(itot,kmax,ntboundary),e12south(itot,kmax,ntboundary), &
-      unorth(itot+1,kmax,ntboundary),vnorth(itot,kmax,ntboundary),wnorth(itot,k1,ntboundary), &
-      thlnorth(itot,kmax,ntboundary),qtnorth(itot,kmax,ntboundary),e12north(itot,kmax,ntboundary), &
-      utop(itot+1,jtot,ntboundary),vtop(itot,jtot+1,ntboundary),wtop(itot,jtot,ntboundary), &
-      thltop(itot,jtot,ntboundary),qttop(itot,jtot,ntboundary),e12top(itot,jtot,ntboundary))
-    ! Read time array
-    if(myid==0) then
-      STATUS = NF90_INQ_VARID(NCID, 'time', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, tboundary, start=(/1/), count=(/ntboundary/) )
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-    endif
-    call MPI_BCAST(tboundary, ntboundary,MY_REAL,0,comm3d,mpierr)
-    ! Read boundaries
-    if(myid==0) then
+      ! Read fields
+      select case(ib)
+      case(1,2)
+        istart = (/myidy*jmax+1,1,1/)
+      case(3,4)
+        istart = (/myidx*imax+1,1,1/)
+      case(5)
+        istart = (/myidx*imax+1,myidy*jmax+1,1/)
+      end select
       ! Read u
-      STATUS = NF90_INQ_VARID(NCID, 'uwest', VARID)
+      STATUS = NF90_INQ_VARID(NCID,'u'//boundary(ib)%name, VARID)
       if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, uwest, start=(/1,1,1/), count=(/jtot,kmax,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'ueast', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, ueast, start=(/1,1,1/), count=(/jtot,kmax,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'usouth', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, usouth, start=(/1,1,1/), count=(/itot+1,kmax,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'unorth', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, unorth, start=(/1,1,1/), count=(/itot+1,kmax,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'utop', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, utop, start=(/1,1,1/), count=(/itot+1,jtot,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%u, start=istart, &
+        & count=(/boundary(ib)%nx1u,boundary(ib)%nx2u,ntboundary/))
       ! Read v
-      STATUS = NF90_INQ_VARID(NCID, 'vwest', VARID)
+      STATUS = NF90_INQ_VARID(NCID, 'v'//boundary(ib)%name, VARID)
       if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, vwest, start=(/1,1,1/), count=(/jtot+1,kmax,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'veast', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, veast, start=(/1,1,1/), count=(/jtot+1,kmax,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'vsouth', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, vsouth, start=(/1,1,1/), count=(/itot,kmax,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'vnorth', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, vnorth, start=(/1,1,1/), count=(/itot,kmax,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'vtop', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, vtop, start=(/1,1,1/), count=(/itot,jtot+1,ntboundary/))
+      STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%v, start=istart, &
+        & count=(/boundary(ib)%nx1v,boundary(ib)%nx2v,ntboundary/))
       if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
       ! Read w
-      STATUS = NF90_INQ_VARID(NCID, 'wwest', VARID)
+      STATUS = NF90_INQ_VARID(NCID, 'w'//boundary(ib)%name, VARID)
       if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, wwest, start=(/1,1,1/), count=(/jtot,k1,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'weast', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, weast, start=(/1,1,1/), count=(/jtot,k1,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'wsouth', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, wsouth, start=(/1,1,1/), count=(/itot,k1,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'wnorth', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, wnorth, start=(/1,1,1/), count=(/itot,k1,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'wtop', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, wtop, start=(/1,1,1/), count=(/itot,jtot,ntboundary/))
+      STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%w, start=istart, &
+        & count=(/boundary(ib)%nx1w,boundary(ib)%nx2w,ntboundary/))
       if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
       ! Read thl
-      STATUS = NF90_INQ_VARID(NCID, 'thlwest', VARID)
+      STATUS = NF90_INQ_VARID(NCID, 'thl'//boundary(ib)%name, VARID)
       if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, thlwest, start=(/1,1,1/), count=(/jtot,kmax,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'thleast', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, thleast, start=(/1,1,1/), count=(/jtot,kmax,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'thlsouth', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, thlsouth, start=(/1,1,1/), count=(/itot,kmax,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'thlnorth', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, thlnorth, start=(/1,1,1/), count=(/itot,kmax,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'thltop', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, thltop, start=(/1,1,1/), count=(/itot,jtot,ntboundary/))
+      STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%thl, start=istart, &
+        & count=(/boundary(ib)%nx1,boundary(ib)%nx2,ntboundary/))
       if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
       ! Read qt
-      STATUS = NF90_INQ_VARID(NCID, 'qtwest', VARID)
+      STATUS = NF90_INQ_VARID(NCID, 'qt'//boundary(ib)%name, VARID)
       if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, qtwest, start=(/1,1,1/), count=(/jtot,kmax,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'qteast', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, qteast, start=(/1,1,1/), count=(/jtot,kmax,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'qtsouth', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, qtsouth, start=(/1,1,1/), count=(/itot,kmax,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'qtnorth', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, qtnorth, start=(/1,1,1/), count=(/itot,kmax,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'qttop', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, qttop, start=(/1,1,1/), count=(/itot,jtot,ntboundary/))
+      STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%qt, start=istart, &
+        & count=(/boundary(ib)%nx1,boundary(ib)%nx2,ntboundary/))
       if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
       ! Read e12
-      STATUS = NF90_INQ_VARID(NCID, 'e12west', VARID)
+      STATUS = NF90_INQ_VARID(NCID, 'e12'//boundary(ib)%name, VARID)
       if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, e12west, start=(/1,1,1/), count=(/jtot,kmax,ntboundary/))
+      STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%e12, start=istart, &
+        & count=(/boundary(ib)%nx1,boundary(ib)%nx2,ntboundary/))
       if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'e12east', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, e12east, start=(/1,1,1/), count=(/jtot,kmax,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'e12south', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, e12south, start=(/1,1,1/), count=(/itot,kmax,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'e12north', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, e12north, start=(/1,1,1/), count=(/itot,kmax,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_INQ_VARID(NCID, 'e12top', VARID)
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-      STATUS = NF90_GET_VAR (NCID, VARID, e12top, start=(/1,1,1/), count=(/itot,jtot,ntboundary/))
-      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      ! Read input for turbulent pertubations
+      if(lsynturb) then
+        ! Read u2
+        STATUS = NF90_INQ_VARID(NCID, 'u2'//boundary(ib)%name, VARID)
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%u2, start=(/1,1,1/), &
+          & count=(/boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary/))
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        ! Read v2
+        STATUS = NF90_INQ_VARID(NCID, 'v2'//boundary(ib)%name, VARID)
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%v2, start=(/1,1,1/), &
+          & count=(/boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary/))
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        ! Read w2
+        STATUS = NF90_INQ_VARID(NCID, 'w2'//boundary(ib)%name, VARID)
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%w2, start=(/1,1,1/), &
+          & count=(/boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary/))
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        ! Read uv
+        STATUS = NF90_INQ_VARID(NCID, 'uv'//boundary(ib)%name, VARID)
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%uv, start=(/1,1,1/), &
+          & count=(/boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary/))
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        ! Read uw
+        STATUS = NF90_INQ_VARID(NCID, 'uw'//boundary(ib)%name, VARID)
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%uw, start=(/1,1,1/), &
+          & count=(/boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary/))
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        ! Read vw
+        STATUS = NF90_INQ_VARID(NCID, 'vw'//boundary(ib)%name, VARID)
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%vw, start=(/1,1,1/), &
+          & count=(/boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary/))
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        ! Read thl2
+        STATUS = NF90_INQ_VARID(NCID, 'thl2'//boundary(ib)%name, VARID)
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%thl2, start=(/1,1,1/), &
+          & count=(/boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary/))
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        ! Read qt2
+        STATUS = NF90_INQ_VARID(NCID, 'qt2'//boundary(ib)%name, VARID)
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%qt2, start=(/1,1,1/), &
+          & count=(/boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary/))
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        ! Read wthl
+        STATUS = NF90_INQ_VARID(NCID, 'wthl'//boundary(ib)%name, VARID)
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%wthl, start=(/1,1,1/), &
+          & count=(/boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary/))
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        ! Read wqt
+        STATUS = NF90_INQ_VARID(NCID, 'wqt'//boundary(ib)%name, VARID)
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%wqt, start=(/1,1,1/), &
+          & count=(/boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary/))
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      endif
+    end do
+    status = nf90_close(ncid)
+    if (status /= nf90_noerr) call handle_err(status)
+    endif
+    end do
+
     ! Check divergence of data
-      sumdiv = 0.
-      sumdivtot = 0.
+    allocate(sumdiv(ntboundary)); sumdiv = 0.
+    allocate(sumdivtot(ntboundary)); sumdivtot = 0.
+    do it = 1,ntboundary
+      if(lboundary(1)) then
+        do j = 1,jmax
+          do k = 1,kmax
+            sumdiv(it) = sumdiv(it) - rhobf(k)*boundary(1)%u(j,k,it)*dzf(k)*dy
+          end do
+        end do
+      endif
+      if(lboundary(2)) then
+        do j = 1,jmax
+          do k = 1,kmax
+            sumdiv(it) = sumdiv(it) + rhobf(k)*boundary(2)%u(j,k,it)*dzf(k)*dy
+          end do
+        end do
+      endif
+      if(lboundary(3)) then
+        do i = 1,imax
+          do k = 1,kmax
+            sumdiv(it) = sumdiv(it) - rhobf(k)*boundary(3)%v(i,k,it)*dzf(k)*dx
+          end do
+        end do
+      endif
+      if(lboundary(4)) then
+        do i = 1,imax
+          do k = 1,kmax
+            sumdiv(it) = sumdiv(it) + rhobf(k)*boundary(4)%v(i,k,it)*dzf(k)*dx
+          end do
+        end do
+      endif
+      if(lboundary(5)) then
+        do i = 1,imax
+          do j = 1,jmax
+            sumdiv(it) = sumdiv(it) + rhobh(k1)*boundary(5)%w(i,j,it)*dx*dy
+          end do
+        end do
+      endif
+    end do
+    call MPI_ALLREDUCE(sumdiv,sumdivtot,ntboundary,MY_REAL,MPI_SUM,comm3d,mpierr)
+    print *, 'mean and max abs divergence',sum(abs(sumdivtot))/ntboundary,maxval(abs(sumdivtot))
+    if(lboundary(5)) then ! Any divergence is compensated at the top boundary
       do it = 1,ntboundary
-        do i = 1,itot
-          do j = 1,jtot
-            sumtop = sumtop + rhobh(k1)*wtop(i,j,it)*dx*dy
-          end do
-        end do
-        do k = 1,kmax
-          do j = 1,jtot
-            sumwest = sumwest + rhobf(k)*uwest(j,k,it)*dzf(k)*dy
-            sumeast = sumeast + rhobf(k)*ueast(j,k,it)*dzf(k)*dy
-          end do
-          do i = 1,itot
-            sumsouth = sumsouth + rhobf(k)*vsouth(i,k,it)*dzf(k)*dx
-            sumnorth = sumnorth + rhobf(k)*vnorth(i,k,it)*dzf(k)*dx
-          end do
-        end do
-        sumdiv(it) = sumeast-sumwest+sumnorth-sumsouth+sumtop
-        ! Any divergence is compensated at the top boundary
-        wtop(:,:,it)=wtop(:,:,it)-sumdiv(it)/(rhobh(k1)*xsize*ysize)
-        sumtop = 0. ! Check if divergence is close to zero now
-        do i = 1,itot
-          do j = 1,jtot
-            sumtop = sumtop + rhobh(k1)*wtop(i,j,it)*dx*dy
-          end do
-        end do
-        sumdiv(it) = sumeast-sumwest+sumnorth-sumsouth+sumtop
-        sumdivtot = sumdivtot+sumdiv(it)
-        sumwest = 0.;sumeast=0.;sumsouth=0.;sumnorth=0.;sumtop=0.
+        boundary(5)%w(:,:,it)=boundary(5)%w(:,:,it)-sumdivtot(it)/(rhobh(k1)*xsize*ysize)
       end do
-      print *, "Mean and max integrated divergence of boundary input data kg/(m^3*s), correction added to top boundary ", &
-        sumdivtot/(xsize*ysize*zh(k1)*ntboundary),maxval(sumdiv)/(xsize*ysize*zh(k1))
     endif
-    if(myid==0) then
-      status = nf90_close(ncid)
-      if (status /= nf90_noerr) call handle_err(status)
-    endif
-    ! Distribute data
-    call MPI_BCAST(uwest,jtot*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(vwest,(jtot+1)*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(wwest,jtot*k1*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(thlwest,jtot*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(qtwest,jtot*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(e12west,jtot*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(ueast,jtot*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(veast,(jtot+1)*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(weast,jtot*k1*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(thleast,jtot*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(qteast,jtot*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(e12east,jtot*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(usouth,(itot+1)*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(vsouth,itot*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(wsouth,itot*k1*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(thlsouth,itot*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(qtsouth,itot*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(e12south,itot*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(unorth,(itot+1)*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(vnorth,itot*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(wnorth,itot*k1*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(thlnorth,itot*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(qtnorth,itot*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(e12north,itot*kmax*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(utop,(itot+1)*jtot*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(vtop,itot*(jtot+1)*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(wtop,itot*jtot*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(thltop,itot*jtot*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(qttop,itot*jtot*ntboundary,MY_REAL   ,0,comm3d,mpierr)
-    call MPI_BCAST(e12top,itot*jtot*ntboundary,MY_REAL   ,0,comm3d,mpierr)
     ! Copy data to boundary information
     if(lboundary(1).and..not.lperiodic(1)) then
-      sy = myidy*jmax+1
-      ey = sy+jmax-1
-      boundary(1)%u = uwest(sy:ey,:,:)
-      boundary(1)%v = vwest(sy:ey+1,:,:)
-      boundary(1)%w = wwest(sy:ey,:,:)
-      boundary(1)%thl = thlwest(sy:ey,:,:)
-      boundary(1)%qt = qtwest(sy:ey,:,:)
-      boundary(1)%e12 = e12west(sy:ey,:,:)
+      sy = myidy*jmax+1; ey = sy+jmax-1
       do j = 2,j1
         do k = 1,kmax
           u0(2,j,k) = boundary(1)%u(j-1,k,1)
@@ -429,14 +366,7 @@ contains
       end do
     endif
     if(lboundary(2).and..not.lperiodic(2)) then
-      sy = myidy*jmax+1
-      ey = sy+jmax-1
-      boundary(2)%u = ueast(sy:ey,:,:)
-      boundary(2)%v = veast(sy:ey+1,:,:)
-      boundary(2)%w = weast(sy:ey,:,:)
-      boundary(2)%thl = thleast(sy:ey,:,:)
-      boundary(2)%qt = qteast(sy:ey,:,:)
-      boundary(2)%e12 = e12east(sy:ey,:,:)
+      sy = myidy*jmax+1; ey = sy+jmax-1
       do j = 2,j1
         do k = 1,kmax
           u0(i2,j,k) = boundary(2)%u(j-1,k,1)
@@ -445,14 +375,7 @@ contains
       end do
     endif
     if(lboundary(3).and..not.lperiodic(3)) then
-      sx = myidx*imax+1
-      ex = sx+imax-1
-      boundary(3)%u = usouth(sx:ex+1,:,:)
-      boundary(3)%v = vsouth(sx:ex,:,:)
-      boundary(3)%w = wsouth(sx:ex,:,:)
-      boundary(3)%thl = thlsouth(sx:ex,:,:)
-      boundary(3)%qt = qtsouth(sx:ex,:,:)
-      boundary(3)%e12 = e12south(sx:ex,:,:)
+      sx = myidx*imax+1; ex = sx+imax-1
       do i = 2,i1
         do k = 1,kmax
           v0(i,2,k) = boundary(3)%v(i-1,k,1)
@@ -461,14 +384,7 @@ contains
       end do
     endif
     if(lboundary(4).and..not.lperiodic(4)) then
-      sx = myidx*imax+1
-      ex = sx+imax-1
-      boundary(4)%u = unorth(sx:ex+1,:,:)
-      boundary(4)%v = vnorth(sx:ex,:,:)
-      boundary(4)%w = wnorth(sx:ex,:,:)
-      boundary(4)%thl = thlnorth(sx:ex,:,:)
-      boundary(4)%qt = qtnorth(sx:ex,:,:)
-      boundary(4)%e12 = e12north(sx:ex,:,:)
+      sx = myidx*imax+1; ex = sx+imax-1
       do i = 2,i1
         do k = 1,kmax
           v0(i,j2,1:k) = boundary(4)%v(i-1,k,1)
@@ -477,16 +393,8 @@ contains
       end do
     endif
     if(lboundary(5).and..not.lperiodic(5)) then
-      sx = myidx*imax+1
-      ex = sx+imax-1
-      sy = myidy*jmax+1
-      ey = sy+jmax-1
-      boundary(5)%u = utop(sx:ex+1,sy:ey,:)
-      boundary(5)%v = vtop(sx:ex,sy:ey+1,:)
-      boundary(5)%w = wtop(sx:ex,sy:ey,:)
-      boundary(5)%thl = thltop(sx:ex,sy:ey,:)
-      boundary(5)%qt = qttop(sx:ex,sy:ey,:)
-      boundary(5)%e12 = e12top(sx:ex,sy:ey,:)
+      sx = myidx*imax+1; ex = sx+imax-1
+      sy = myidy*jmax+1; ey = sy+jmax-1
       do i = 2,i1
         do j = 2,j1
           w0(i,j,k1) = boundary(5)%w(i-1,j-1,1)
@@ -496,11 +404,7 @@ contains
     endif
     allocate(rhointi(k1))
     rhointi = 1./(rhobf*dzf)
-    deallocate(uwest,vwest,wwest,thlwest,qtwest,e12west, &
-      ueast,veast,weast,thleast,qteast,e12east, &
-      usouth,vsouth,wsouth,thlsouth,qtsouth,e12south, &
-      unorth,vnorth,wnorth,thlnorth,qtnorth,e12north, &
-      utop,vtop,wtop,thltop,qttop,e12top,sumdiv)
+    deallocate(sumdiv,sumdivtot)
   end subroutine openboundary_readboundary
 
   subroutine openboundary_ghost
@@ -530,27 +434,18 @@ contains
     ! Apply open boundaries for domain boundaries for full levels (ghost cells)
     do i = 1,5 ! Loop over boundaries
       if(.not.lboundary(i).or.lperiodic(i)) cycle
-      call applyboundaryf(thlm ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%thl,boundary(i)%nx1,boundary(i)%nx2,profile=thl0av)
-      call applyboundaryf(thl0 ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%thl,boundary(i)%nx1,boundary(i)%nx2,profile=thl0av)
-      call applyboundaryf(qtm  ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%qt,boundary(i)%nx1,boundary(i)%nx2,profile=qt0av)
-      call applyboundaryf(qt0  ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%qt,boundary(i)%nx1,boundary(i)%nx2,profile=qt0av)
-      call applyboundaryf(e12m ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%e12,boundary(i)%nx1,boundary(i)%nx2)
-      call applyboundaryf(e120 ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%e12,boundary(i)%nx1,boundary(i)%nx2)
-      if(lsynturb) then
-        if(i/=1.and.i/=2) call applyboundaryf(um,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%u,boundary(i)%nx1u,boundary(i)%nx2u,turbin=boundary(i)%uturb,profile=u0av)
-        if(i/=1.and.i/=2) call applyboundaryf(u0,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%u,boundary(i)%nx1u,boundary(i)%nx2u,turbin=boundary(i)%uturb,profile=u0av)
-        if(i/=3.and.i/=4) call applyboundaryf(vm,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%v,boundary(i)%nx1v,boundary(i)%nx2v,turbin=boundary(i)%vturb,profile=v0av)
-        if(i/=3.and.i/=4) call applyboundaryf(v0,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%v,boundary(i)%nx1v,boundary(i)%nx2v,turbin=boundary(i)%vturb,profile=v0av)
-        if(i/=5) call applyboundaryf(wm,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%w,boundary(i)%nx1w,boundary(i)%nx2w,turbin=boundary(i)%wturb)
-        if(i/=5) call applyboundaryf(w0,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%w,boundary(i)%nx1w,boundary(i)%nx2w,turbin=boundary(i)%wturb)
-      else
-        if(i/=1.and.i/=2) call applyboundaryf(um,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%u,boundary(i)%nx1u,boundary(i)%nx2u,profile=u0av)
-        if(i/=1.and.i/=2) call applyboundaryf(u0,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%u,boundary(i)%nx1u,boundary(i)%nx2u,profile=u0av)
-        if(i/=3.and.i/=4) call applyboundaryf(vm,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%v,boundary(i)%nx1v,boundary(i)%nx2v,profile=v0av)
-        if(i/=3.and.i/=4) call applyboundaryf(v0,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%v,boundary(i)%nx1v,boundary(i)%nx2v,profile=v0av)
-        if(i/=5) call applyboundaryf(wm,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%w,boundary(i)%nx1w,boundary(i)%nx2w)
-        if(i/=5) call applyboundaryf(w0,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%w,boundary(i)%nx1w,boundary(i)%nx2w)
-      endif
+      call applyboundaryf(thlm ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%thl,boundary(i)%nx1,boundary(i)%nx2,0,boundary(i)%thlturb,profile=thl0av)
+      call applyboundaryf(thl0 ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%thl,boundary(i)%nx1,boundary(i)%nx2,0,boundary(i)%thlturb,profile=thl0av)
+      call applyboundaryf(qtm  ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%qt,boundary(i)%nx1,boundary(i)%nx2,1,boundary(i)%qtturb,profile=qt0av)
+      call applyboundaryf(qt0  ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%qt,boundary(i)%nx1,boundary(i)%nx2,1,boundary(i)%qtturb,profile=qt0av)
+      call applyboundaryf(e12m ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%e12,boundary(i)%nx1,boundary(i)%nx2,1,boundary(i)%e12turb)
+      call applyboundaryf(e120 ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%e12,boundary(i)%nx1,boundary(i)%nx2,1,boundary(i)%e12turb)
+      if(i/=1.and.i/=2) call applyboundaryf(um,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%u,boundary(i)%nx1u,boundary(i)%nx2u,0,boundary(i)%uturb,profile=u0av)
+      if(i/=1.and.i/=2) call applyboundaryf(u0,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%u,boundary(i)%nx1u,boundary(i)%nx2u,0,boundary(i)%uturb,profile=u0av)
+      if(i/=3.and.i/=4) call applyboundaryf(vm,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%v,boundary(i)%nx1v,boundary(i)%nx2v,0,boundary(i)%vturb,profile=v0av)
+      if(i/=3.and.i/=4) call applyboundaryf(v0,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%v,boundary(i)%nx1v,boundary(i)%nx2v,0,boundary(i)%vturb,profile=v0av)
+      if(i/=5) call applyboundaryf(wm,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%w,boundary(i)%nx1w,boundary(i)%nx2w,0,boundary(i)%wturb)
+      if(i/=5) call applyboundaryf(w0,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%w,boundary(i)%nx1w,boundary(i)%nx2w,0,boundary(i)%wturb)
     end do
   end subroutine openboundary_ghost
 
@@ -569,19 +464,11 @@ contains
     integer :: i
 
     if(.not.lopenbc) return
-    if(lsynturb) then
-      if(lboundary(1).and..not.lperiodic(1)) call applyboundaryh(1,boundary(1)%nx1,boundary(1)%nx2,boundary(1)%uturb)
-      if(lboundary(2).and..not.lperiodic(2)) call applyboundaryh(2,boundary(2)%nx1,boundary(2)%nx2,boundary(2)%uturb)
-      if(lboundary(3).and..not.lperiodic(3)) call applyboundaryh(3,boundary(3)%nx1,boundary(3)%nx2,boundary(3)%vturb)
-      if(lboundary(4).and..not.lperiodic(4)) call applyboundaryh(4,boundary(4)%nx1,boundary(4)%nx2,boundary(4)%vturb)
-      if(lboundary(5).and..not.lperiodic(5)) call applyboundaryh(5,boundary(5)%nx1,boundary(5)%nx2,boundary(5)%wturb)
-    else
-      if(lboundary(1).and..not.lperiodic(1)) call applyboundaryh(1,boundary(1)%nx1,boundary(1)%nx2)
-      if(lboundary(2).and..not.lperiodic(2)) call applyboundaryh(2,boundary(2)%nx1,boundary(2)%nx2)
-      if(lboundary(3).and..not.lperiodic(3)) call applyboundaryh(3,boundary(3)%nx1,boundary(3)%nx2)
-      if(lboundary(4).and..not.lperiodic(4)) call applyboundaryh(4,boundary(4)%nx1,boundary(4)%nx2)
-      if(lboundary(5).and..not.lperiodic(5)) call applyboundaryh(5,boundary(5)%nx1,boundary(5)%nx2)
-    endif
+    if(lboundary(1).and..not.lperiodic(1)) call applyboundaryh(1,boundary(1)%nx1,boundary(1)%nx2,boundary(1)%uturb)
+    if(lboundary(2).and..not.lperiodic(2)) call applyboundaryh(2,boundary(2)%nx1,boundary(2)%nx2,boundary(2)%uturb)
+    if(lboundary(3).and..not.lperiodic(3)) call applyboundaryh(3,boundary(3)%nx1,boundary(3)%nx2,boundary(3)%vturb)
+    if(lboundary(4).and..not.lperiodic(4)) call applyboundaryh(4,boundary(4)%nx1,boundary(4)%nx2,boundary(4)%vturb)
+    if(lboundary(5).and..not.lperiodic(5)) call applyboundaryh(5,boundary(5)%nx1,boundary(5)%nx2,boundary(5)%wturb)
     ! Calculate and add correction term to guarantee conservation of mass
     do i = 1,5
       if(.not. lboundary(i).or.lperiodic(i)) cycle
@@ -860,7 +747,7 @@ contains
     endif
   end subroutine openboundary_excjs
 
-  subroutine applyboundaryf(a,sx,ex,sy,ey,sz,ez,ih,jh,ib,val,nx1,nx2,turbin,profile)
+  subroutine applyboundaryf(a,sx,ex,sy,ey,sz,ez,ih,jh,ib,val,nx1,nx2,lmax0,turb,profile)
     ! Routine fills ghost cells based on dirichlet (inflow) or
     ! homogeneous neumann (outflow) boundary conditions. Adds synthetic
     ! turbulent pertubations to dirichlet condition if lsynturb=true.
@@ -868,21 +755,14 @@ contains
     use modfields, only : u0,v0,w0,e120
     use modmpi, only : myid
     implicit none
-    integer, intent(in) :: sx,ex,sy,ey,sz,ez,ih,jh,ib,nx1,nx2
+    integer, intent(in) :: sx,ex,sy,ey,sz,ez,ih,jh,ib,nx1,nx2,lmax0
     real, intent(in), dimension(nx1,nx2,ntboundary) :: val
-    real, intent(in), dimension(nx1,nx2), optional :: turbin
+    real, intent(in), dimension(nx1,nx2) :: turb
     real, intent(in), dimension(k1), optional :: profile ! optional for top boundary to take gradient into account
     real, intent(inout), dimension(sx-ih:ex+ih,sy-jh:ey+jh,sz:ez) :: a
-    real, dimension(nx1,nx2) :: turb
     integer :: i,j,k,itp,itm,kav=5,itpn,itmn
     real :: coefdir,coefneu,tp,tm,fp,fm,fpn,fmn,ddz,valtarget,un,e
 
-    ! Check if turbulent pertubations need to be added
-    if(present(turbin)) then
-      turb = turbin
-    else
-      turb = 0.
-    endif
     ! Get interpolation coefficients for boundary input
     itm=1
     if(ntboundary>1) then
@@ -914,6 +794,7 @@ contains
             coefdir = 1.
             coefneu = -un*tau0-e/un*dx
             valtarget = fp*val(j,k,itp)+fm*val(j,k,itm)+turb(j,k)
+            if(lmax0==1) valtarget = max(valtarget,0.)
             a(sx-1,j+1,k) = ( 2.*dx*valtarget - &
               a(sx,j+1,k)*(coefdir*dx+2.*coefneu) ) / (coefdir*dx-2.*coefneu)
           endif
@@ -930,6 +811,7 @@ contains
             coefdir = 1.
             coefneu = -un*tau0-e/un*dx
             valtarget = fp*val(j,k,itp)+fm*val(j,k,itm)+turb(j,k)
+            if(lmax0==1) valtarget = max(valtarget,0.)
             a(ex+1,j+1,k) = ( 2.*dx*valtarget - &
               a(ex,j+1,k)*(coefdir*dx-2.*coefneu) ) / (coefdir*dx+2.*coefneu)
           endif
@@ -946,6 +828,7 @@ contains
             coefdir = 1.
             coefneu = -un*tau0-e/un*dy
             valtarget = fp*val(i,k,itp)+fm*val(i,k,itm)+turb(i,k)
+            if(lmax0==1) valtarget = max(valtarget,0.)
             a(i+1,sy-1,k) = ( 2.*dy*valtarget - &
               a(i+1,sy,k)*(coefdir*dy+2.*coefneu) ) / (coefdir*dy-2.*coefneu)
           endif
@@ -962,6 +845,7 @@ contains
             coefdir = 1.
             coefneu = -un*tau0-e/un*dy
             valtarget = fp*val(i,k,itp)+fm*val(i,k,itm)+turb(i,k)
+            if(lmax0==1) valtarget = max(valtarget,0.)
             a(i+1,ey+1,k) = ( 2.*dy*valtarget - &
               a(i+1,ey,k)*(coefdir*dy-2.*coefneu) ) / (coefdir*dy+2.*coefneu)
           endif
@@ -985,6 +869,7 @@ contains
             coefdir = 1.
             coefneu = -un*tau0-e/un*dzh(ez)
             valtarget = fp*val(i,j,itp)+fm*val(i,j,itm)+turb(i,j)-(un*tau0+e/un*dzh(ez))*ddz
+            if(lmax0==1) valtarget = max(valtarget,0.)
             a(i+1,j+1,ez) = ( 2.*dzh(ez)*valtarget - &
               a(i+1,j+1,ez-1)*(coefdir*dzh(ez)-2.*coefneu) ) / (coefdir*dzh(ez)+2.*coefneu)
           endif
@@ -993,7 +878,7 @@ contains
     end select
   end subroutine applyboundaryf
 
-  subroutine applyboundaryh(ib,nx1,nx2,turbin)
+  subroutine applyboundaryh(ib,nx1,nx2,turb)
     ! Subroutine that applies the radiation and dirichlet boundary conditions
     ! for the boundary normal velocity components. Adds synthetic turbulence to
     ! the inflow dirichlet boundaries if lsyntrub=.true.
@@ -1003,8 +888,7 @@ contains
     use modfields, only : um,u0,up,vm,v0,vp,wm,w0,wp,rhobf,rhobh,thvh,thv0h
     implicit none
     integer, intent(in) :: nx1,nx2,ib
-    real, intent(in), dimension(nx1,nx2), optional :: turbin
-    real, dimension(nx1,nx2) :: turb
+    real, intent(in), dimension(nx1,nx2) :: turb
     integer :: i,j,k,itmc,itmn,itpc,itpn,ipatch,jpatch,kpatch
     real :: tm,tp,fpc,fmc,fpn,fmn,unext,uwallcurrent,ipos,jpos
     itmc=1
@@ -1039,11 +923,6 @@ contains
       fmc  = 1.
       fpn  = 0.
       fmn  = 1.
-    endif
-    if(present(turbin)) then
-      turb=turbin
-    else
-      turb = 0.
     endif
     ! Apply domain boundaries
     select case(ib) ! Select boundary

@@ -9,19 +9,16 @@
 !  This file is part of DALES.
 !  To do:
 !  - Allow for different zint and adjust rhointi accordingly
-!  - Correct non divergence free input
+!  - Correct non divergence free input more elegently
 !  - Allow for non-homogeneous starting conditions
 !  - Change definition uphase for division by 0
 !  - When to use nextval and currentval for nudging and check rtimee
-!  - How to handle vertical derivative in top boundary condition (full levels)
-!  - Clean loop for full level boundary conditions
-!  - Use correct velocity level to determine in or outflow in full levels
+!  - How to handle vertical derivative in top boundary condition (full levels) now obtained from profile (horizontal average)
+!  - Use correct velocity level to determine in or outflow in full levels, half levels are used now
 !  - Check rtimee and half level nudgin and correction term
 !  - Use um or u0 in half levels
-!  - Check starting points in modforces
 !  - Add possibility for higher order integration schemes
 !  - Adjust turbulent pertubation generation
-!  - Tau0 to input variables
 !
 ! DALES is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -106,7 +103,7 @@ contains
     boundary(3)%nx1patch = nxpatch; boundary(3)%nx2patch = nzpatch
     boundary(4)%nx1patch = nxpatch; boundary(4)%nx2patch = nzpatch
     boundary(5)%nx1patch = nxpatch; boundary(5)%nx2patch = nypatch
-    ! Allocate phase velocity and correction term radiation boundaries
+    ! Allocate phase velocity, correction term radiation boundaries and pertubation fields
     do i = 1,5
       if(.not.lboundary(i) .or. lperiodic(i)) cycle ! Open boundary not present
       allocate(boundary(i)%radcorr(boundary(i)%nx1patch,boundary(i)%nx2patch), &
@@ -156,6 +153,7 @@ contains
     real,dimension(:),allocatable :: sumdiv,sumdivtot
 
     if(.not.lopenbc) return
+    ! If reading netcdf file is thread safe loop can be removed
     do ip = 0,nprocs-1
     call MPI_Barrier(comm3d,mpierr)
     if(myid==ip) then ! Read netcdf file one by one
@@ -174,7 +172,7 @@ contains
     STATUS = NF90_GET_VAR (NCID, VARID, tboundary, start=(/1/), count=(/ntboundary/) )
     if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
     do ib = 1,5 ! loop over boundaries
-      ! Allocate fields
+      ! Allocate input fields
       if(.not.lboundary(ib) .or. lperiodic(ib)) cycle ! Open boundary not present
       allocate(boundary(ib)%thl(boundary(ib)%nx1,boundary(ib)%nx2,ntboundary), &
         boundary(ib)%qt(boundary(ib)%nx1,boundary(ib)%nx2,ntboundary),  &
@@ -183,7 +181,7 @@ contains
         boundary(ib)%v(boundary(ib)%nx1v,boundary(ib)%nx2v,ntboundary), &
         boundary(ib)%w(boundary(ib)%nx1w,boundary(ib)%nx2w,ntboundary), &
         )
-      if(lsynturb) then ! Allocate turbulent fields
+      if(lsynturb) then ! Allocate turbulent input fields
         allocate(boundary(ib)%u2(boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary), &
         & boundary(ib)%v2(boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary), &
         & boundary(ib)%w2(boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary), &
@@ -301,18 +299,6 @@ contains
         STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%wqt, start=(/1,1,1/), &
           & count=(/boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary/))
         if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-        ! ! Read randthl
-        ! STATUS = NF90_INQ_VARID(NCID, 'randthl'//boundary(ib)%name, VARID)
-        ! if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-        ! STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%randthl, start=(/1,1/), &
-        !   & count=(/boundary(ib)%nx1,boundary(ib)%nx2/))
-        ! if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-        ! ! Read randqt
-        ! STATUS = NF90_INQ_VARID(NCID, 'randqt'//boundary(ib)%name, VARID)
-        ! if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-        ! STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%randqt, start=(/1,1/), &
-        !   & count=(/boundary(ib)%nx1,boundary(ib)%nx2/))
-        ! if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
       endif
     end do
     status = nf90_close(ncid)
@@ -426,7 +412,7 @@ contains
     implicit none
     integer :: i,n
     if(.not.lopenbc) return
-    ! Apply non domain boundaries and forced periodic boundaries
+    ! Apply non domain boundaries and periodic boundaries
     call openboundary_excjs(um   , 2,i1,2,j1,1,k1,ih,jh,.not.lboundary(1:4).or.lperiodic(1:4))
     call openboundary_excjs(u0   , 2,i1,2,j1,1,k1,ih,jh,.not.lboundary(1:4).or.lperiodic(1:4))
     call openboundary_excjs(vm   , 2,i1,2,j1,1,k1,ih,jh,.not.lboundary(1:4).or.lperiodic(1:4))
@@ -760,7 +746,7 @@ contains
   end subroutine openboundary_excjs
 
   subroutine applyboundaryf(a,sx,ex,sy,ey,sz,ez,ih,jh,ib,val,nx1,nx2,lmax0,turb,profile)
-    ! Routine fills ghost cells based on dirichlet (inflow) or
+    ! Routine fills ghost cells based on robin (inflow) or
     ! homogeneous neumann (outflow) boundary conditions. Adds synthetic
     ! turbulent pertubations to dirichlet condition if lsynturb=true.
     use modglobal, only : dzh,dx,dy,imax,jmax,kmax,rtimee,rdt,i2,j2,k1,i1,j1
@@ -818,7 +804,7 @@ contains
           un = u0(ex+1,min(j+1,j1),min(k,kmax))
           if(un>=0) then ! Homogeneous Neumann outflow
             a(ex+1,j+1,k)=a(ex,j+1,k)
-          else ! Robin or Dirichlet inflow conditions
+          else ! Robin inflow conditions
             e = e120(ex,min(j+1,j1),min(k,kmax))
             coefdir = 1.
             coefneu = -un*tau0-e/un*dx
@@ -835,7 +821,7 @@ contains
           un = v0(min(i+1,i1),sy,min(k,kmax))
           if(un<=0) then ! Homogeneous Neumann outflow
             a(i+1,sy-1,k)=a(i+1,sy,k)
-          else ! Robin or Dirichlet inflow conditions
+          else ! Robin inflow conditions
             e = e120(min(i+1,i1),sy,min(k,kmax))
             coefdir = 1.
             coefneu = -un*tau0-e/un*dy
@@ -852,7 +838,7 @@ contains
           un = v0(min(i+1,i1),ey+1,min(k,kmax))
           if(un>=0) then ! Homogeneous Neumann outflow
             a(i+1,ey+1,k)=a(i+1,ey,k)
-          else ! Robin or Dirichlet inflow conditions
+          else ! Robin inflow conditions
             e = e120(min(i+1,i1),ey,min(k,kmax))
             coefdir = 1.
             coefneu = -un*tau0-e/un*dy
@@ -893,7 +879,7 @@ contains
   subroutine applyboundaryh(ib,nx1,nx2,turb)
     ! Subroutine that applies the radiation and dirichlet boundary conditions
     ! for the boundary normal velocity components. Adds synthetic turbulence to
-    ! the inflow dirichlet boundaries if lsyntrub=.true.
+    ! the inflow dirichlet boundaries if lsynturb=.true.
     use mpi
     use modmpi, only : MY_REAL,myidx,myidy
     use modglobal, only : dx,dy,dzf,dxi,dyi,rdt,i2,j2,k1,i1,j1,kmax,rtimee,rdt,itot,jtot,imax,jmax,grav

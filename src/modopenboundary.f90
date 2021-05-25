@@ -301,6 +301,18 @@ contains
         STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%wqt, start=(/1,1,1/), &
           & count=(/boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary/))
         if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        ! ! Read randthl
+        ! STATUS = NF90_INQ_VARID(NCID, 'randthl'//boundary(ib)%name, VARID)
+        ! if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        ! STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%randthl, start=(/1,1/), &
+        !   & count=(/boundary(ib)%nx1,boundary(ib)%nx2/))
+        ! if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        ! ! Read randqt
+        ! STATUS = NF90_INQ_VARID(NCID, 'randqt'//boundary(ib)%name, VARID)
+        ! if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        ! STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%randqt, start=(/1,1/), &
+        !   & count=(/boundary(ib)%nx1,boundary(ib)%nx2/))
+        ! if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
       endif
     end do
     status = nf90_close(ncid)

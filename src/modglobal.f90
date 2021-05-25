@@ -205,7 +205,7 @@ save
         real, allocatable, dimension(:,:,:) :: u,v,w,thl,qt,e12, &
           & u2,v2,w2,uv,uw,vw,thl2,qt2,wthl,wqt,ci
         real, allocatable, dimension(:,:) :: radcorr,uphase,uphasesingle, &
-          radcorrsingle,uturb,vturb,wturb,thlturb,qtturb,e12turb
+          radcorrsingle,uturb,vturb,wturb,thlturb,qtturb,e12turb!,randqt,randthl
         real, allocatable, dimension(:,:,:,:) :: eigvec
         character (len=:), allocatable :: name
       end type

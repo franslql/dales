@@ -64,6 +64,7 @@ contains
       nxpatch = int(dx/dxint*real(itot));
       nypatch = int(dy/dyint*real(jtot));
       nzpatch = kmax
+      lambdas = merge(lambda,lambdas,lambdas==-1.)
       lambdasxyz = (/merge(lambdas,lambdas_x,lambdas_x==-1.), &
                   & merge(lambdas,lambdas_y,lambdas_y==-1.), &
                   & merge(lambdas,lambdas_z,lambdas_z==-1.)/)

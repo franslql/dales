@@ -60,7 +60,7 @@ contains
                                   lmoist,lcoriol,lpressgrad,igrw_damp,geodamptime,lmomsubs,cu, cv,ifnamopt,fname_options,llsadv,&
                                   ibas_prf,lambda_crit,iadv_mom,iadv_tke,iadv_thl,iadv_qt,iadv_sv,courant,peclet,ladaptive,author,lnoclouds,lrigidlid,unudge,ntimedep, &
                                   solver_id, maxiter, tolerance, n_pre, n_post, precond, checknamelisterror, &
-                                  lopenbc,lperiodic,dxint,dyint,dzint,lsynturb,tau0,nmodes,tau,lambda,lambdas,lambdas_x,lambdas_y,lambdas_z
+                                  lopenbc,lperiodic,dxint,dyint,dzint,taum,tauh,pbc,lsynturb,nmodes,tau,lambda,lambdas,lambdas_x,lambdas_y,lambdas_z
     use modforces,         only : lforce_user
     use modsurfdata,       only : z0,ustin,wtsurf,wqsurf,wsvsurf,ps,thls,isurf
     use modsurface,        only : initsurface
@@ -85,7 +85,7 @@ contains
 
     implicit none
     integer :: ierr
-    logical,dimension(4) :: lper = .false.
+    logical,dimension(2) :: lper = .false.
     character(256), optional, intent(in) :: path
 
     !declare namelists
@@ -108,7 +108,7 @@ contains
     namelist/SOLVER/ &
         solver_id, maxiter, tolerance, n_pre, n_post, precond
     namelist/OPENBC/ &
-        lopenbc,dxint,dyint,dzint,tau0,lper,lsynturb,lambda,tau,nmodes,lambdas,lambdas_x,lambdas_y,lambdas_z
+        lopenbc,lper,dxint,dyint,dzint,taum,tauh,pbc,lsynturb,tau,lambda,nmodes,lambdas,lambdas_x,lambdas_y,lambdas_z
 
 
     ! get myid
@@ -154,9 +154,12 @@ contains
       call checknamelisterror(ierr, ifnamopt, 'OPENBC')
       write(6 ,OPENBC)
       close(ifnamopt)
-      ! Check if grid needs to be periodic
-      lperiodic(1:4) = lper
-      if(lopenbc) periods = (/lperiodic(1),lperiodic(3)/)
+      if(lopenbc) then
+        ! Check if grid needs to be periodic
+        periods = (/lper(1),lper(2)/)
+        lperiodic(1:2) = lper(1)
+        lperiodic(3:4) = lper(2)
+      endif
       close(ifnamopt)
     end if
 
@@ -272,11 +275,13 @@ contains
 
     ! Broadcast openboundaries Variables
     call MPI_BCAST(lopenbc,1,MPI_LOGICAL,0,commwrld,mpierr)
+    call MPI_BCAST(lperiodic,5,MPI_LOGICAL,0,commwrld,mpierr)
     call MPI_BCAST(dxint,1,MY_REAL   ,0,commwrld,mpierr)
     call MPI_BCAST(dyint,1,MY_REAL   ,0,commwrld,mpierr)
     call MPI_BCAST(dzint,1,MY_REAL   ,0,commwrld,mpierr)
-    call MPI_BCAST(tau0,1,MY_REAL   ,0,commwrld,mpierr)
-    call MPI_BCAST(lperiodic,5,MPI_LOGICAL,0,commwrld,mpierr)
+    call MPI_BCAST(taum,1,MY_REAL   ,0,commwrld,mpierr)
+    call MPI_BCAST(tauh,1,MY_REAL   ,0,commwrld,mpierr)
+    call MPI_BCAST(pbc,1,MPI_INTEGER   ,0,commwrld,mpierr)
     call MPI_BCAST(lsynturb,1,MPI_LOGICAL,0,commwrld,mpierr)
     call MPI_BCAST(lambda,1,MY_REAL   ,0,commwrld,mpierr)
     call MPI_BCAST(tau,1,MY_REAL   ,0,commwrld,mpierr)

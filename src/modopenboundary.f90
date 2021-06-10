@@ -36,7 +36,7 @@
 !  Copyright 1993-2009 Delft University of Technology, Wageningen University, Utrecht University, KNMI
 !
 module modopenboundary
-use modglobal, only : boundary_type,boundary,lopenbc,lboundary,lperiodic,lsynturb,dzint,dxint,dyint,ntboundary,tboundary,tau0
+use modglobal, only : boundary_type,boundary,lopenbc,lboundary,lperiodic,lsynturb,dzint,dxint,dyint,ntboundary,tboundary
 use modsynturb, only : synturb,initsynturb,exitsynturb
 use netcdf
 implicit none
@@ -153,10 +153,6 @@ contains
     real,dimension(:),allocatable :: sumdiv,sumdivtot
 
     if(.not.lopenbc) return
-    ! If reading netcdf file is thread safe loop can be removed
-    do ip = 0,nprocs-1
-    call MPI_Barrier(comm3d,mpierr)
-    if(myid==ip) then ! Read netcdf file one by one
     !--- open nc file ---
     STATUS = NF90_OPEN('openboundaries.inp.'//cexpnr//'.nc', nf90_nowrite, NCID)
     if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
@@ -303,8 +299,6 @@ contains
     end do
     status = nf90_close(ncid)
     if (status /= nf90_noerr) call handle_err(status)
-    endif
-    end do
 
     ! Check divergence of data
     allocate(sumdiv(ntboundary)); sumdiv = 0.
@@ -749,7 +743,7 @@ contains
     ! Routine fills ghost cells based on robin (inflow) or
     ! homogeneous neumann (outflow) boundary conditions. Adds synthetic
     ! turbulent pertubations to dirichlet condition if lsynturb=true.
-    use modglobal, only : dzh,dx,dy,imax,jmax,kmax,rtimee,rdt,i2,j2,k1,i1,j1
+    use modglobal, only : dzh,dx,dy,imax,jmax,kmax,rtimee,rdt,i2,j2,k1,i1,j1,tauh,pbc
     use modfields, only : u0,v0,w0,e120
     use modmpi, only : myid
     implicit none
@@ -789,12 +783,12 @@ contains
             a(sx-1,j+1,k)=a(sx,j+1,k)
           else ! Robin inflow conditions
             e = e120(sx,min(j+1,j1),min(k,kmax))
-            coefdir = 1.
-            coefneu = -un*tau0-e/un*dx
-            valtarget = fp*val(j,k,itp)+fm*val(j,k,itm)+turb(j,k)
-            if(lmax0==1) valtarget = max(valtarget,0.)
+            coefdir = abs(un)**pbc
+            coefneu = -tauh*un*(abs(un)**pbc+e**pbc)
+            valtarget = (fp*val(j,k,itp)+fm*val(j,k,itm)+turb(j,k))*coefdir
             a(sx-1,j+1,k) = ( 2.*dx*valtarget - &
               a(sx,j+1,k)*(coefdir*dx+2.*coefneu) ) / (coefdir*dx-2.*coefneu)
+            if(lmax0==1) a(sx-1,j+1,k) = max(0.,a(sx-1,j+1,k))
           endif
         end do
       end do
@@ -806,12 +800,13 @@ contains
             a(ex+1,j+1,k)=a(ex,j+1,k)
           else ! Robin inflow conditions
             e = e120(ex,min(j+1,j1),min(k,kmax))
-            coefdir = 1.
-            coefneu = -un*tau0-e/un*dx
-            valtarget = fp*val(j,k,itp)+fm*val(j,k,itm)+turb(j,k)
+            coefdir = abs(un)**pbc
+            coefneu = -tauh*un*(abs(un)**pbc+e**pbc)
+            valtarget = (fp*val(j,k,itp)+fm*val(j,k,itm)+turb(j,k))*coefdir
             if(lmax0==1) valtarget = max(valtarget,0.)
             a(ex+1,j+1,k) = ( 2.*dx*valtarget - &
               a(ex,j+1,k)*(coefdir*dx-2.*coefneu) ) / (coefdir*dx+2.*coefneu)
+            if(lmax0==1) a(ex+1,j+1,k) = max(a(ex+1,j+1,k),0.)
           endif
         end do
       end do
@@ -823,12 +818,12 @@ contains
             a(i+1,sy-1,k)=a(i+1,sy,k)
           else ! Robin inflow conditions
             e = e120(min(i+1,i1),sy,min(k,kmax))
-            coefdir = 1.
-            coefneu = -un*tau0-e/un*dy
-            valtarget = fp*val(i,k,itp)+fm*val(i,k,itm)+turb(i,k)
-            if(lmax0==1) valtarget = max(valtarget,0.)
+            coefdir = abs(un)**pbc
+            coefneu = -tauh*un*(abs(un)**pbc+e**pbc)
+            valtarget = (fp*val(i,k,itp)+fm*val(i,k,itm)+turb(i,k))*coefdir
             a(i+1,sy-1,k) = ( 2.*dy*valtarget - &
               a(i+1,sy,k)*(coefdir*dy+2.*coefneu) ) / (coefdir*dy-2.*coefneu)
+            if(lmax0==1) a(i+1,sy-1,k) = max(a(i+1,sy-1,k),0.)
           endif
         end do
       end do
@@ -840,12 +835,12 @@ contains
             a(i+1,ey+1,k)=a(i+1,ey,k)
           else ! Robin inflow conditions
             e = e120(min(i+1,i1),ey,min(k,kmax))
-            coefdir = 1.
-            coefneu = -un*tau0-e/un*dy
-            valtarget = fp*val(i,k,itp)+fm*val(i,k,itm)+turb(i,k)
-            if(lmax0==1) valtarget = max(valtarget,0.)
+            coefdir = abs(un)**pbc
+            coefneu = -tauh*un*(abs(un)**pbc+e**pbc)
+            valtarget = (fp*val(i,k,itp)+fm*val(i,k,itm)+turb(i,k))*coefdir
             a(i+1,ey+1,k) = ( 2.*dy*valtarget - &
               a(i+1,ey,k)*(coefdir*dy-2.*coefneu) ) / (coefdir*dy+2.*coefneu)
+            if(lmax0==1) a(i+1,ey+1,k) = max(a(i+1,ey+1,k),0.)
           endif
         end do
       end do
@@ -864,12 +859,12 @@ contains
             a(i+1,j+1,ez)=ddz*dzh(ez)+a(i+1,j+1,ez-1)
           else ! Robin inflow conditions
             e = e120(min(i+1,i1),min(j+1,j1),ez-1)
-            coefdir = 1.
-            coefneu = -un*tau0-e/un*dzh(ez)
-            valtarget = fp*val(i,j,itp)+fm*val(i,j,itm)+turb(i,j)-(un*tau0+e/un*dzh(ez))*ddz
-            if(lmax0==1) valtarget = max(valtarget,0.)
+            coefdir = abs(un)**pbc
+            coefneu = -tauh*un*(abs(un)**pbc+e**pbc)
+            valtarget = (fp*val(i,j,itp)+fm*val(i,j,itm)+turb(i,j))*coefdir+ddz*coefneu
             a(i+1,j+1,ez) = ( 2.*dzh(ez)*valtarget - &
               a(i+1,j+1,ez-1)*(coefdir*dzh(ez)-2.*coefneu) ) / (coefdir*dzh(ez)+2.*coefneu)
+            if(lmax0==1) a(i+1,j+1,ez) = max(a(i+1,j+1,ez),0.)
           endif
         end do
       end do
@@ -882,13 +877,13 @@ contains
     ! the inflow dirichlet boundaries if lsynturb=.true.
     use mpi
     use modmpi, only : MY_REAL,myidx,myidy
-    use modglobal, only : dx,dy,dzf,dxi,dyi,rdt,i2,j2,k1,i1,j1,kmax,rtimee,rdt,itot,jtot,imax,jmax,grav
+    use modglobal, only : dx,dy,dzf,dxi,dyi,rdt,i2,j2,k1,i1,j1,kmax,rtimee,rdt,itot,jtot,imax,jmax,grav,taum
     use modfields, only : um,u0,up,vm,v0,vp,wm,w0,wp,rhobf,rhobh,thvh,thv0h
     implicit none
     integer, intent(in) :: nx1,nx2,ib
     real, intent(in), dimension(nx1,nx2) :: turb
     integer :: i,j,k,itmc,itmn,itpc,itpn,ipatch,jpatch,kpatch
-    real :: tm,tp,fpc,fmc,fpn,fmn,unext,uwallcurrent,ipos,jpos
+    real :: tm,tp,fpc,fmc,fpn,fmn,unext,uwallcurrent,ipos,jpos,tau
     itmc=1
     itmn=1
     if(ntboundary>1) then
@@ -925,6 +920,7 @@ contains
     ! Apply domain boundaries
     select case(ib) ! Select boundary
     case(1) ! West
+      tau = max(taum,rdt)
       do j = 1,nx1
         jpos = j + (myidy * jmax) - 1
         jpatch = int((jpos-0.5)*dy/dyint)+1
@@ -934,13 +930,14 @@ contains
           if(uwallcurrent<=0.) then ! Outflow (Radiation)
             up(2,j+1,k) = -max(min(boundary(1)%uphase(jpatch,kpatch),uwallcurrent),-dx/rdt) * &
               (u0(3,j+1,k)-u0(2,j+1,k))*dxi
-          else ! Inflow (Dirichlet)
+          else ! Inflow nudging
             unext = fpn*boundary(1)%u(j,k,itpn)+fmn*boundary(1)%u(j,k,itmn)
-            up(2,j+1,k) = ((unext+turb(j,k)) - um(2,j+1,k))/rdt
+            up(2,j+1,k) = ((unext+turb(j,k)) - u0(2,j+1,k))/tau
           endif
         end do
       end do
     case(2) ! East
+      tau = max(taum,rdt)
       do j = 1,nx1
         jpos = j + (myidy * jmax) - 1
         jpatch = int((jpos-0.5)*dy/dyint)+1
@@ -952,11 +949,12 @@ contains
               (u0(i2,j+1,k)-u0(i1,j+1,k))*dxi
           else ! Inflow (Dirichlet)
             unext = fpn*boundary(2)%u(j,k,itpn)+fmn*boundary(2)%u(j,k,itmn)
-            up(i2,j+1,k) = ((unext+turb(j,k)) - um(i2,j+1,k))/rdt
+            up(i2,j+1,k) = ((unext+turb(j,k)) - u0(i2,j+1,k))/tau
           endif
         end do
       end do
     case(3) ! South
+      tau = max(taum,rdt)
       do i = 1,nx1
         ipos = i + (myidx * imax) - 1
         ipatch = int((ipos-0.5)*dx/dxint)+1
@@ -968,11 +966,12 @@ contains
               (v0(i+1,3,k)-v0(i+1,2,k))*dyi
           else ! Inflow (Dirichlet)
             unext = fpn*boundary(3)%v(i,k,itpn)+fmn*boundary(3)%v(i,k,itmn)
-            vp(i+1,2,k) = ((unext+turb(i,k)) - vm(i+1,2,k))/rdt
+            vp(i+1,2,k) = ((unext+turb(i,k)) - v0(i+1,2,k))/tau
           endif
         end do
       end do
     case(4) ! North
+      tau = max(taum,rdt)
       do i = 1,nx1
         ipos = i + (myidx * imax) - 1
         ipatch = int((ipos-0.5)*dx/dxint)+1
@@ -984,11 +983,12 @@ contains
               (v0(i+1,j2,k)-v0(i+1,j1,k))*dyi
           else ! Inflow (Dirichlet)
             unext = fpn*boundary(4)%v(i,k,itpn)+fmn*boundary(4)%v(i,k,itmn)
-            vp(i+1,j2,k) = ((unext+turb(i,k)) - vm(i+1,j2,k))/rdt
+            vp(i+1,j2,k) = ((unext+turb(i,k)) - v0(i+1,j2,k))/tau
           endif
         end do
       end do
     case(5) ! Top
+      tau = max(taum,rdt)
       do i = 1,nx1
         ipos = i + (myidx * imax) - 1
         ipatch = int((ipos-0.5)*dx/dxint)+1
@@ -1002,7 +1002,7 @@ contains
               grav*(thv0h(i+1,j+1,k1)-thvh(k1))/thvh(k1)
           else ! Inflow (Dirichlet)
             unext = fpn*boundary(5)%w(i,j,itpn)+fmn*boundary(5)%w(i,j,itmn)
-            wp(i+1,j+1,k1) = ((unext+turb(i,j)) - wm(i+1,j+1,k1))/rdt
+            wp(i+1,j+1,k1) = ((unext+turb(i,j)) - w0(i+1,j+1,k1))/tau
           endif
         end do
       end do

@@ -199,7 +199,7 @@ save
       character(3) cexpnr
 
       ! Variables for modopenboundary.f90
-      logical :: lopenbc = .false., lsynturb = .false.
+      logical :: lopenbc = .false., lsynturb = .false.,linithetero = .false.
       type boundary_type
         integer :: nx1,nx2,nx1patch,nx2patch,nx1u,nx2u,nx1v,nx2v,nx1w,nx2w
         real, allocatable, dimension(:,:,:) :: u,v,w,thl,qt,e12, &

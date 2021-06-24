@@ -60,7 +60,7 @@ contains
                                   lmoist,lcoriol,lpressgrad,igrw_damp,geodamptime,lmomsubs,cu, cv,ifnamopt,fname_options,llsadv,&
                                   ibas_prf,lambda_crit,iadv_mom,iadv_tke,iadv_thl,iadv_qt,iadv_sv,courant,peclet,ladaptive,author,lnoclouds,lrigidlid,unudge,ntimedep, &
                                   solver_id, maxiter, tolerance, n_pre, n_post, precond, checknamelisterror, &
-                                  lopenbc,lperiodic,dxint,dyint,dzint,taum,tauh,pbc,lsynturb,nmodes,tau,lambda,lambdas,lambdas_x,lambdas_y,lambdas_z
+                                  lopenbc,linithetero,lperiodic,dxint,dyint,dzint,taum,tauh,pbc,lsynturb,nmodes,tau,lambda,lambdas,lambdas_x,lambdas_y,lambdas_z
     use modforces,         only : lforce_user
     use modsurfdata,       only : z0,ustin,wtsurf,wqsurf,wsvsurf,ps,thls,isurf
     use modsurface,        only : initsurface
@@ -108,7 +108,7 @@ contains
     namelist/SOLVER/ &
         solver_id, maxiter, tolerance, n_pre, n_post, precond
     namelist/OPENBC/ &
-        lopenbc,lper,dxint,dyint,dzint,taum,tauh,pbc,lsynturb,tau,lambda,nmodes,lambdas,lambdas_x,lambdas_y,lambdas_z
+        lopenbc,linithetero,lper,dxint,dyint,dzint,taum,tauh,pbc,lsynturb,tau,lambda,nmodes,lambdas,lambdas_x,lambdas_y,lambdas_z
 
 
     ! get myid
@@ -275,6 +275,7 @@ contains
 
     ! Broadcast openboundaries Variables
     call MPI_BCAST(lopenbc,1,MPI_LOGICAL,0,commwrld,mpierr)
+    call MPI_BCAST(linithetero,1,MPI_LOGICAL,0,commwrld,mpierr)
     call MPI_BCAST(lperiodic,5,MPI_LOGICAL,0,commwrld,mpierr)
     call MPI_BCAST(dxint,1,MY_REAL   ,0,commwrld,mpierr)
     call MPI_BCAST(dyint,1,MY_REAL   ,0,commwrld,mpierr)
@@ -420,7 +421,7 @@ contains
                                   rtimee,timee,ntrun,btime,dt_lim,nsv,&
                                   zf,dzf,dzh,rv,rd,cp,rlv,pref0,om23_gs,&
                                   ijtot,cu,cv,e12min,dzh,cexpnr,ifinput,lwarmstart,ltotruntime,itrestart,&
-                                  trestart, ladaptive,llsadv,tnextrestart,longint,lopenbc
+                                  trestart, ladaptive,llsadv,tnextrestart,longint,lopenbc,linithetero
     use modsubgrid,        only : ekm,ekh
     use modsurfdata,       only : wsvsurf, &
                                   thls,tskin,tskinm,tsoil,tsoilm,phiw,phiwm,Wl,Wlm,thvs,qts,isurf,svs,obl,oblav,&
@@ -433,7 +434,7 @@ contains
 
     use modtestbed,        only : ltestbed,tb_ps,tb_thl,tb_qt,tb_u,tb_v,tb_w,tb_ug,tb_vg,&
                                   tb_dqtdxls,tb_dqtdyls,tb_qtadv,tb_thladv
-    use modopenboundary,   only : openboundary_ghost,openboundary_readboundary
+    use modopenboundary,   only : openboundary_ghost,openboundary_readboundary,openboundary_initfields
 
     integer i,j,k,n
     logical negval !switch to allow or not negative values in randomnization
@@ -530,26 +531,38 @@ contains
       call MPI_BCAST(uprof  ,kmax,MY_REAL   ,0,comm3d,mpierr)
       call MPI_BCAST(vprof  ,kmax,MY_REAL   ,0,comm3d,mpierr)
       call MPI_BCAST(e12prof,kmax,MY_REAL   ,0,comm3d,mpierr)
-      do k=1,kmax
-      do j=1,j2
-      do i=1,i2
-        thl0(i,j,k) = thlprof(k)
-        thlm(i,j,k) = thlprof(k)
-        qt0 (i,j,k) = qtprof (k)
-        qtm (i,j,k) = qtprof (k)
-        u0  (i,j,k) = uprof  (k) - cu
-        um  (i,j,k) = uprof  (k) - cu
-        v0  (i,j,k) = vprof  (k) - cv
-        vm  (i,j,k) = vprof  (k) - cv
-        w0  (i,j,k) = 0.0
-        wm  (i,j,k) = 0.0
-        e120(i,j,k) = e12prof(k)
-        e12m(i,j,k) = e12prof(k)
-        ekm (i,j,k) = 0.0
-        ekh (i,j,k) = 0.0
-      end do
-      end do
-      end do
+      if(lopenbc .and. linithetero) then! Openboundaries with heterogeneous initialisation
+        call openboundary_initfields()
+	      do k = 1,kmax
+	      do j = 1,j2
+	      do i = 1,i2
+	         ekm(i,j,k) = 0.0
+	         ekh(i,j,k) = 0.0
+	      end do
+	      end do
+	      end do
+      else
+        do k=1,kmax
+        do j=1,j2
+        do i=1,i2
+          thl0(i,j,k) = thlprof(k)
+          thlm(i,j,k) = thlprof(k)
+          qt0 (i,j,k) = qtprof (k)
+          qtm (i,j,k) = qtprof (k)
+          u0  (i,j,k) = uprof  (k) - cu
+          um  (i,j,k) = uprof  (k) - cu
+          v0  (i,j,k) = vprof  (k) - cv
+          vm  (i,j,k) = vprof  (k) - cv
+          w0  (i,j,k) = 0.0
+          wm  (i,j,k) = 0.0
+          e120(i,j,k) = e12prof(k)
+          e12m(i,j,k) = e12prof(k)
+          ekm (i,j,k) = 0.0
+          ekh (i,j,k) = 0.0
+        end do
+        end do
+        end do
+      endif
     !---------------------------------------------------------------
     !  1.2 randomnize fields
     !---------------------------------------------------------------

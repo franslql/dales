@@ -10,7 +10,6 @@
 !  To do:
 !  - Allow for different zint and adjust rhointi accordingly
 !  - Correct non divergence free input more elegently
-!  - Allow for non-homogeneous starting conditions
 !  - Change definition uphase for division by 0
 !  - When to use nextval and currentval for nudging and check rtimee
 !  - How to handle vertical derivative in top boundary condition (full levels) now obtained from profile (horizontal average)
@@ -18,7 +17,7 @@
 !  - Check rtimee and half level nudgin and correction term
 !  - Use um or u0 in half levels
 !  - Add possibility for higher order integration schemes
-!  - Adjust turbulent pertubation generation
+!  - Extent turbulent pertubation generation options
 !
 ! DALES is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
@@ -36,7 +35,7 @@
 !  Copyright 1993-2009 Delft University of Technology, Wageningen University, Utrecht University, KNMI
 !
 module modopenboundary
-use modglobal, only : boundary_type,boundary,lopenbc,lboundary,lperiodic,lsynturb,dzint,dxint,dyint,ntboundary,tboundary
+use modglobal, only : boundary_type,boundary,lopenbc,linithetero,lboundary,lperiodic,lsynturb,dzint,dxint,dyint,ntboundary,tboundary
 use modsynturb, only : synturb,initsynturb,exitsynturb
 use netcdf
 implicit none
@@ -49,7 +48,8 @@ contains
   subroutine initopenboundary
     ! Initialisation routine for openboundaries
     use modmpi, only : myidx, myidy, nprocx, nprocy
-    use modglobal, only : imax,jmax,kmax,i1,j1,k1,dx,dy,dzf,itot,jtot,zf,zh,solver_id
+    use modglobal, only : imax,jmax,kmax,i1,j1,k1,dx,dy,dzf,itot,jtot,zf,zh,solver_id, &
+      & iadv_mom,iadv_thl,iadv_qt,iadv_tke,iadv_sv,nsv
     use modfields, only : rhobf
     implicit none
     integer :: i,j
@@ -58,6 +58,11 @@ contains
     if(.not.lopenbc) return
     ! Check if hypre solver is selected
     if(solver_id /= 1) stop 'Openboundaries only possible with HYPRE pressure solver, change solver_id to 1'
+    if(iadv_mom /=2) stop 'Only second order advection scheme supported with openboundaries, change iadv_mom to 2'
+    if(iadv_thl /=2) stop 'Only second order advection scheme supported with openboundaries, change iadv_thl to 2'
+    if(iadv_qt  /=2) stop 'Only second order advection scheme supported with openboundaries, change iadv_qt to 2'
+    if(iadv_tke /=2) stop 'Only second order advection scheme supported with openboundaries, change iadv_tke to 2'
+    if(any(iadv_sv(1:nsv)/=2)) stop 'Only second order advection scheme supported with openboundaries, change iadv_sv to 2'
     ! Check if boundary is present on process
     if(myidx==0)        lboundary(1) = .true.
     if(myidx==nprocx-1) lboundary(2) = .true.
@@ -139,13 +144,63 @@ contains
     call exitsynturb
   end subroutine exitopenboundary
 
+  subroutine openboundary_initfields
+    use modglobal, only : imax,jmax,kmax,i1,j1,cexpnr
+    use modfields, only : u0,um,v0,vm,w0,wm,thl0,thlm,qt0,qtm,e120,e12m
+    use modmpi, only : myidx,myidy
+    implicit none
+    integer :: VARID,STATUS,NCID,mpierr,timeID
+    integer, dimension(3) :: istart
+    if(.not.lopenbc) return
+    if(.not.linithetero) return
+    u0 = 0.; um = 0.; v0 = 0.; vm = 0.; w0 = 0.; wm = 0.;
+    thl0 = 0.; thlm = 0.; qt0 = 0; qtm = 0; e120 = 0.; e12m = 0.
+    !--- open initfields.input.001.nc ---
+    STATUS = NF90_OPEN('initfields.inp.'//cexpnr//'.nc', nf90_nowrite, NCID)
+    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+    istart = (/myidx*imax+1,myidy*jmax+1,1/)
+    STATUS = NF90_INQ_VARID(NCID,'u0', VARID)
+    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+    STATUS = NF90_GET_VAR (NCID, VARID,u0(2:i1,2:j1,1:kmax),start=istart,count=(/imax,jmax,kmax/))
+    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+    um = u0
+    STATUS = NF90_INQ_VARID(NCID,'v0', VARID)
+    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+    STATUS = NF90_GET_VAR (NCID, VARID,v0(2:i1,2:j1,1:kmax),start=istart,count=(/imax,jmax,kmax/))
+    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+    vm = v0
+    STATUS = NF90_INQ_VARID(NCID,'w0', VARID)
+    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+    STATUS = NF90_GET_VAR (NCID, VARID,w0(2:i1,2:j1,1:kmax),start=istart,count=(/imax,jmax,kmax/))
+    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+    wm = w0
+    STATUS = NF90_INQ_VARID(NCID,'thl0', VARID)
+    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+    STATUS = NF90_GET_VAR (NCID, VARID,thl0(2:i1,2:j1,1:kmax),start=istart,count=(/imax,jmax,kmax/))
+    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+    thlm = thl0
+    STATUS = NF90_INQ_VARID(NCID,'qt0', VARID)
+    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+    STATUS = NF90_GET_VAR (NCID, VARID,qt0(2:i1,2:j1,1:kmax),start=istart,count=(/imax,jmax,kmax/))
+    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+    qtm = qt0
+    STATUS = NF90_INQ_VARID(NCID,'e120', VARID)
+    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+    STATUS = NF90_GET_VAR (NCID, VARID,e120(2:i1,2:j1,1:kmax),start=istart,count=(/imax,jmax,kmax/))
+    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+    e12m = e120
+    status = nf90_close(ncid)
+    if (status /= nf90_noerr) call handle_err(status)
+
+   ! call openboundary_ghost() ! fill ghost cells
+  end subroutine
+
   subroutine openboundary_readboundary
     use mpi
     use modglobal, only : dzf,kmax,cexpnr,imax,jmax,itot,jtot,k1,ntboundary, &
       tboundary,dzh,dx,dy,i1,j1,i2,j2,kmax,xsize,ysize,zh
     use modfields, only : rhobf,rhobh,uprof,vprof,thlprof,qtprof,e12prof,u0,um,v0,vm,w0,wm
     use modmpi, only : myid,comm3d,myidy,myidx,MY_REAL,nprocs
-    use modchecksim, only : chkdiv
     implicit none
     integer :: it,i,j,k,ib,sy,sx,ey,ex,ip
     character(len = nf90_max_name) :: RecordDimName
@@ -343,7 +398,7 @@ contains
       endif
     end do
     call MPI_ALLREDUCE(sumdiv,sumdivtot,ntboundary,MY_REAL,MPI_SUM,comm3d,mpierr)
-    print *, 'mean and max abs divergence',sum(abs(sumdivtot))/ntboundary,maxval(abs(sumdivtot))
+    if(myid==0) print *, 'mean and max abs divergence',sum(abs(sumdivtot))/ntboundary,maxval(abs(sumdivtot))
     ! Spread divergence over boundaries
     do it = 1,ntboundary
       if(lboundary(1)) then
@@ -416,8 +471,7 @@ contains
       endif
     end do
     call MPI_ALLREDUCE(sumdiv,sumdivtot,ntboundary,MY_REAL,MPI_SUM,comm3d,mpierr)
-    print *, 'first,mean and max abs divergence after correction',sumdivtot(1),sum(abs(sumdivtot))/ntboundary,maxval(abs(sumdivtot))
-    call chkdiv
+    if(myid==0) print *, 'first,mean and max abs divergence after correction',sumdivtot(1),sum(abs(sumdivtot))/ntboundary,maxval(abs(sumdivtot))
     ! Copy data to boundary information
     if(lboundary(1).and..not.lperiodic(1)) then
       sy = myidy*jmax+1; ey = sy+jmax-1
@@ -468,8 +522,6 @@ contains
     allocate(rhointi(k1))
     rhointi = 1./(rhobf*dzf)
     deallocate(sumdiv,sumdivtot)
-    call chkdiv
-    print *, maxval(abs(w0(:,:,0)))
   end subroutine openboundary_readboundary
 
   subroutine openboundary_ghost

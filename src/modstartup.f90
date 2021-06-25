@@ -892,7 +892,8 @@ contains
 
     use modsurfdata, only : ustar,thlflux,qtflux,svflux,dthldz,dqtdz,ps,thls,qts,thvs,oblav,&
                            tsoil,phiw,tskin,Wl,isurf,ksoilmax,Qnet,swdavn,swuavn,lwdavn,lwuavn,nradtime,&
-                           obl,xpatches,ypatches,ps_patch,thls_patch,qts_patch,thvs_patch,oblpatch,lhetero,qskin
+                           obl,xpatches,ypatches,ps_patch,thls_patch,qts_patch,thvs_patch,oblpatch,lhetero,qskin,&
+                           z0misurf5,z0hisurf5,z0qisurf5
     use modraddata, only: iradiation,useMcICA, tnext_radiation => tnext, &
                           thlprad,swd,swu,lwd,lwu,swdca,swuca,lwdca,lwuca,swdir,swdif,lwc,&
                           SW_up_TOA,SW_dn_TOA,LW_up_TOA,LW_dn_TOA,&
@@ -994,7 +995,6 @@ contains
       read(ifinput) (((svflux(i,j,n),i=1,i2),j=1,j2),n=1,nsv)
       read(ifinput) (dsv(n),n=1,nsv)
       read(ifinput)  timee
-      close(ifinput)
     end if
 
     if (isurf == 1) then

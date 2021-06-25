@@ -425,7 +425,7 @@ contains
     use modsubgrid,        only : ekm,ekh
     use modsurfdata,       only : wsvsurf, &
                                   thls,tskin,tskinm,tsoil,tsoilm,phiw,phiwm,Wl,Wlm,thvs,qts,isurf,svs,obl,oblav,&
-                                  thvs_patch,lhetero,qskin
+                                  thvs_patch,lhetero,qskin,z0misurf5,z0hisurf5,z0qisurf5
     use modsurface,        only : surface,qtsurf,dthldz,ps
     use modboundary,       only : boundary
     use modmpi,            only : slabsum,myid,comm3d,mpierr,my_real
@@ -635,7 +635,7 @@ contains
         tsoilm = tsoil
         phiwm  = phiw
         Wlm    = Wl
-      case(2)
+      case(2,5)
         tskin  = thls
       case(3,4)
         thls = thlprof(1)
@@ -649,7 +649,10 @@ contains
       ! Set initial Obukhov length to -0.1 for iteration
       obl   = -0.1
       oblav = -0.1
-
+      ! set inital z0 values to -1 for iteration
+      z0misurf5 = -1
+      z0hisurf5 = -1
+      z0qisurf5 = -1
       call qtsurf
 
       dthldz = (thlprof(1) - thls)/zf(1)
@@ -969,7 +972,11 @@ contains
       read(ifinput)  ((LW_up_ca_TOA (i,j ),i=1,i2),j=1,j2)
       read(ifinput)  ((LW_dn_ca_TOA (i,j ),i=1,i2),j=1,j2)
 !!!!! end of radiation quantities
-
+      if(isurf == 5) then
+        read(ifinput)    z0misurf5
+        read(ifinput)    z0hisurf5
+        read(ifinput)    z0qisurf5
+      end if
       if(lhetero) then
         read(ifinput)   ((ps_patch  (i,j),i=1,xpatches),j=1,ypatches)
         read(ifinput)   ((thls_patch(i,j),i=1,xpatches),j=1,ypatches)
@@ -1038,7 +1045,8 @@ contains
   subroutine do_writerestartfiles
     use modsurfdata,only: ustar,thlflux,qtflux,svflux,dthldz,dqtdz,ps,thls,qts,thvs,oblav,&
                           tsoil,phiw,tskin,Wl,ksoilmax,isurf,ksoilmax,Qnet,swdavn,swuavn,lwdavn,lwuavn,nradtime,&
-                          obl,xpatches,ypatches,ps_patch,thls_patch,qts_patch,thvs_patch,oblpatch,lhetero,qskin
+                          obl,xpatches,ypatches,ps_patch,thls_patch,qts_patch,thvs_patch,oblpatch,lhetero,qskin,&
+                          z0misurf5,z0hisurf5,z0qisurf5
     use modraddata, only: iradiation,useMcICA, tnext_radiation => tnext, &
                           thlprad,swd,swu,lwd,lwu,swdca,swuca,lwdca,lwuca,swdir,swdif,lwc,&
                           SW_up_TOA,SW_dn_TOA,LW_up_TOA,LW_dn_TOA,&
@@ -1117,7 +1125,11 @@ contains
       write(ifoutput)  ((LW_up_ca_TOA (i,j ),i=1,i2),j=1,j2)
       write(ifoutput)  ((LW_dn_ca_TOA (i,j ),i=1,i2),j=1,j2)
 !!!!! end of radiation quantities
-
+      if (isurf == 5) then
+        write (ifoutput)  z0misurf5
+        write (ifoutput)  z0hisurf5
+        write (ifoutput)  z0qisurf5
+      end if
       if(lhetero) then
         write(ifoutput)  ((ps_patch  (i,j),i=1,xpatches),j=1,ypatches)
         write(ifoutput)  ((thls_patch(i,j),i=1,xpatches),j=1,ypatches)

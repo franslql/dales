@@ -388,7 +388,7 @@ contains
     if (myid == 0) then
       select case (isurf)
       case(1)
-      case(2,10)
+      case(2,5,10)
       case(3:4)
         if (wtsurf <-1e10)  stop 'wtsurf not set'
         if (wqsurf <-1e10)  stop 'wqsurf not set'

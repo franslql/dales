@@ -619,6 +619,15 @@ contains
       end if
     end if
 
+    ! set resistances for isurf=5 case
+    if (isurf==5) then
+      allocate(rah(i2,j2))
+      allocate(raq(i2,j2))
+      rs  = rsisurf2
+      rah = 50
+      raq = 50
+    end if
+
     allocate(albedo(i2,j2))
     allocate(z0m(i2,j2))
     allocate(z0h(i2,j2))
@@ -756,6 +765,77 @@ contains
       horvpatch = max(horvpatch, 0.1)
     endif
 
+    !> Analogous to isurf=2, this calculation uses the Charnock relation to calculate ustar, z0m, z0h, and z0q
+    !  iteratively every time step. These are then used to determine the surface fluxes.
+    if (isurf==5) then
+
+      if (lhetero) stop "ERROR: isurf=5 can't take lhetero=true"
+      if (lmostlocal) stop "ERROR: isurf=5 can't take lmostlocal=true"
+
+      if(lneutral) then
+        obl(:,:) = -1.e10
+        oblav    = -1.e10
+      else
+        call iterCharnock
+      end if
+
+      ! 3     -   Calculate the drag coefficient and aerodynamic resistance
+      Cm_isurf5 = fkar ** 2. / (log(zf(1) / z0misurf5) - psim(zf(1) / oblav) + psim(z0misurf5 /  oblav)) ** 2.
+      Ch_isurf5 = fkar ** 2. / (log(zf(1) / z0misurf5) - psim(zf(1) / oblav) + psim(z0misurf5 / oblav)) / &
+      (log(zf(1) / z0hisurf5) - psih(zf(1) / oblav) + psih(z0hisurf5 / oblav))
+      Cq_isurf5 = fkar ** 2. / (log(zf(1) / z0misurf5) - psim(zf(1) / oblav) + psim(z0misurf5 / oblav)) / &
+      (log(zf(1) / z0qisurf5) - psih(zf(1) / oblav) + psih(z0qisurf5 / oblav))
+
+      horvav  = sqrt(u0av(1) ** 2. + v0av(1) ** 2.)
+      horvav  = max(horvav, 0.1)
+
+      do j = 2, j1
+        do i = 2, i1
+
+          rah(i,j) = 1. / ( Ch_isurf5 * horvav )
+          raq(i,j) = 1. / ( Cq_isurf5 * horvav )
+
+        end do
+      end do
+
+      ! Solve the surface energy balance and the heat and moisture transport in the soil
+      do j = 2, j1
+        do i = 2, i1
+          tskin(i,j) = thls
+        end do
+      end do
+
+      call qtsurf
+
+      ! 2     -   Calculate the surface fluxes
+      do j = 2, j1
+        do i = 2, i1
+          upcu   = 0.5 * (u0(i,j,1) + u0(i+1,j,1)) + cu
+          vpcv   = 0.5 * (v0(i,j,1) + v0(i,j+1,1)) + cv
+          horv   = sqrt(upcu ** 2. + vpcv ** 2.)
+          horv   = max(horv, 0.1)
+          horvav = sqrt(u0av(1) ** 2. + v0av(1) ** 2.)
+          horvav = max(horvav, 0.1)
+
+          ustar  (i,j) = sqrt(Cm_isurf5) * horvav
+
+          thlflux(i,j) = - ( thl0(i,j,1) - tskin(i,j) ) / rah(i,j)
+          qtflux(i,j) = - (qt0(i,j,1)  - qskin(i,j)) / raq(i,j)
+          do n=1,nsv
+            svflux(i,j,n) = wsvsurf(n)
+          end do
+
+          phimzf = phim(zf(1)/obl(i,j))
+          phihzf = phih(zf(1)/obl(i,j))
+
+          dudz  (i,j) = ustar(i,j) * phimzf / (fkar*zf(1))*(upcu/horv)
+          dvdz  (i,j) = ustar(i,j) * phimzf / (fkar*zf(1))*(vpcv/horv)
+          dthldz(i,j) = - thlflux(i,j) / ustar(i,j) * phihzf / (fkar*zf(1))
+          dqtdz (i,j) = - qtflux(i,j)  / ustar(i,j) * phihzf / (fkar*zf(1))
+        end do
+      end do
+
+    end if
 
     ! CvH start with computation of drag coefficients to allow for implicit solver
     if(isurf <= 2) then
@@ -911,7 +991,7 @@ contains
 
       end if
 
-    else
+    elseif(isurf .ne. 5) then
 
       if(lneutral) then
         obl(:,:) = -1.e10
@@ -1059,7 +1139,32 @@ contains
     patchx = 0
     patchy = 0
 
+    !> isurf=5 uses ra_q, based on Charnock relation for z0q
+    if(isurf==5) then
+
+      qtsl = 0.
+      do j = 2, j1
+        do i = 2, i1
+          exner      = (ps / pref0)**(rd/cp)
+          tsurf      = tskin(i,j) * exner
+          es         = es0 * exp(at*(tsurf-tmelt) / (tsurf-bt))
+          qsatsurf   = rd / rv * es / ps
+          surfwet    = raq(i,j) / (raq(i,j) + rs(i,j))
+          qskin(i,j) = surfwet * qsatsurf + (1. - surfwet) * qt0(i,j,1)
+          qtsl       = qtsl + qskin(i,j)
+        end do
+      end do
+
+      call MPI_ALLREDUCE(qtsl, qts, 1,  MY_REAL, &
+                         MPI_SUM, comm3d,mpierr)
+
+      qts  = qts / ijtot
+      thvs = thls * (1. + (rv/rd - 1.) * qts)
+
+    end if
+
     if(isurf <= 2) then
+
       qtsl = 0.
       do j = 2, j1
         do i = 2, i1
@@ -1108,6 +1213,104 @@ contains
     return
 
   end subroutine qtsurf
+
+
+
+  !> Calculates the Obukhov length, u*, z0m, z0h, and z0q iteratively based on the Charnock relation.
+    subroutine iterCharnock
+      use modglobal, only   : zf, rv, rd, grav, i1, j1, i2, j2, cu, cv, fkar
+      use modfields, only   : thl0av, qt0av, u0, v0, thl0, qt0, u0av, v0av
+      use modsurfdata, only : alpha, am, ah, aq, nu, z0misurf5, z0hisurf5, z0qisurf5
+      use mpi
+      use modmpi,    only   : my_real,mpierr,comm3d,mpi_sum,mpi_integer
+      implicit none
+
+      integer               :: i,j,iterL
+      real                  :: thv, thvsl, L, horv2, oblavl
+      real                  :: Rib, Lstart, Lend, fx, fxdif, Lold
+      real                  :: upcu, vpcv
+      real                  :: ustoldisurf5, tstoldisurf5, qstoldisurf5, ustarisurf5, tstarisurf5, qstarisurf5, chku
+
+      thv    = thl0av(1) * (1. + (rv/rd - 1.) * qt0av(1))
+
+      horv2 = u0av(1)**2. + v0av(1)**2.
+      horv2 = max(horv2, 0.01)
+
+      ! get z0's from previous timestep, or initialize with good guess (ustar ~ 0.3)
+      if (z0misurf5 < 0) then
+          z0misurf5 = 0.0001
+          z0hisurf5 = 0.00002
+          z0qisurf5 = 0.00003
+      end if
+
+      Rib   = grav / thvs * zf(1) * (thv - thvs) / horv2
+      if (Rib == 0) then
+         ! Rib can be 0 if there is no surface flux
+         ! L is capped at 1e6 below, so use the same cap here
+         L = 1e6
+         write(*,*) 'Obukhov length: Rib = 0 -> setting L=1e6 (2nd point)'
+      else
+         iterL = 0
+         L = oblav
+
+         if(Rib * L < 0. .or. abs(L) == 1e5) then
+            if(Rib > 0) L = 0.01
+            if(Rib < 0) L = -0.01
+         end if
+
+         ustarisurf5 = fkar ** 2. / (log(zf(1) / z0misurf5) - psim(zf(1) / L) + psim(z0misurf5 / L))
+         tstarisurf5 = fkar ** 2. / (log(zf(1) / z0hisurf5) - psim(zf(1) / L) + psim(z0hisurf5 / L))
+         qstarisurf5 = fkar ** 2. / (log(zf(1) / z0qisurf5) - psim(zf(1) / L) + psim(z0qisurf5 / L))
+
+         do while (.true.)
+            iterL    = iterL + 1
+            Lold    = L
+
+           ! save previous star values
+            ustoldisurf5 = ustarisurf5
+            tstoldisurf5 = tstarisurf5
+            qstoldisurf5 = qstarisurf5
+
+           ! calculate z0
+            z0misurf5 = am * nu/ustarisurf5 + alpha * ustarisurf5**2./grav
+            z0hisurf5 = ah * nu/ustarisurf5
+            z0qisurf5 = aq * nu/ustarisurf5
+
+           ! calculate new stars
+            ustarisurf5 = fkar ** 2. / (log(zf(1) / z0misurf5) - psim(zf(1) / L) + psim(z0misurf5 / L))
+            tstarisurf5 = fkar ** 2. / (log(zf(1) / z0hisurf5) - psim(zf(1) / L) + psim(z0hisurf5 / L))
+            qstarisurf5 = fkar ** 2. / (log(zf(1) / z0qisurf5) - psim(zf(1) / L) + psim(z0qisurf5 / L))
+
+           ! variable to check if ustar has converged
+           chku = abs((ustarisurf5 - ustoldisurf5) / ustarisurf5)
+
+           ! calculate Obukhov length
+            fx      = Rib - zf(1) / L * (log(zf(1) / z0hisurf5) - psih(zf(1) / L) + psih(z0hisurf5 / L)) /&
+                   (log(zf(1) / z0misurf5) - psim(zf(1) / L) + psim(z0misurf5 / L)) ** 2.
+            Lstart  = L - 0.001*L
+            Lend    = L + 0.001*L
+            fxdif   = ( (- zf(1) / Lstart * (log(zf(1) / z0hisurf5) - psih(zf(1) / Lstart) + psih(z0hisurf5 / Lstart)) /&
+                   (log(zf(1) / z0misurf5) - psim(zf(1) / Lstart) + psim(z0misurf5 / Lstart)) ** 2.) - (-zf(1) / Lend * (log(zf(1) / z0hisurf5) &
+                   - psih(zf(1) / Lend) + psih(z0hisurf5 / Lend)) / (log(zf(1) / z0misurf5) - psim(zf(1) / Lend) &
+                   + psim(z0misurf5 / Lend)) ** 2.) ) / (Lstart - Lend)
+           L       = L - fx / fxdif
+
+           if(Rib * L < 0. .or. abs(L) == 1e5) then
+               if(Rib > 0) L = 0.01
+               if(Rib < 0) L = -0.01
+            end if
+            if(abs((L - Lold)/L) < 1e-4 .and. chku < 0.01) exit
+            if(iterL > 1000) stop 'Obukhov length calculation does not converge'
+         end do
+         if (abs(L)>1e6) L = sign(1.0e6,L)
+      obl(:,:) = L
+
+      end if
+      oblav = L
+
+      return
+
+    end subroutine iterCharnock
 
 !> Calculates the Obukhov length iteratively.
   subroutine getobl

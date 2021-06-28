@@ -531,62 +531,6 @@ contains
       call MPI_BCAST(uprof  ,kmax,MY_REAL   ,0,comm3d,mpierr)
       call MPI_BCAST(vprof  ,kmax,MY_REAL   ,0,comm3d,mpierr)
       call MPI_BCAST(e12prof,kmax,MY_REAL   ,0,comm3d,mpierr)
-      if(lopenbc .and. linithetero) then! Openboundaries with heterogeneous initialisation
-        call openboundary_initfields()
-	      do k = 1,kmax
-	      do j = 1,j2
-	      do i = 1,i2
-	         ekm(i,j,k) = 0.0
-	         ekh(i,j,k) = 0.0
-	      end do
-	      end do
-	      end do
-      else
-        do k=1,kmax
-        do j=1,j2
-        do i=1,i2
-          thl0(i,j,k) = thlprof(k)
-          thlm(i,j,k) = thlprof(k)
-          qt0 (i,j,k) = qtprof (k)
-          qtm (i,j,k) = qtprof (k)
-          u0  (i,j,k) = uprof  (k) - cu
-          um  (i,j,k) = uprof  (k) - cu
-          v0  (i,j,k) = vprof  (k) - cv
-          vm  (i,j,k) = vprof  (k) - cv
-          w0  (i,j,k) = 0.0
-          wm  (i,j,k) = 0.0
-          e120(i,j,k) = e12prof(k)
-          e12m(i,j,k) = e12prof(k)
-          ekm (i,j,k) = 0.0
-          ekh (i,j,k) = 0.0
-        end do
-        end do
-        end do
-      endif
-    !---------------------------------------------------------------
-    !  1.2 randomnize fields
-    !---------------------------------------------------------------
-
-      krand  = min(krand,kmax)
-      negval = .False. ! No negative perturbations for qt (negative moisture is non physical)
-      do k = 1,krand
-        call randomnize(qtm ,k,randqt ,irandom,ih,jh,negval)
-        call randomnize(qt0 ,k,randqt ,irandom,ih,jh,negval)
-      end do
-      negval = .True. ! negative perturbations allowed
-      do k = 1,krand
-        call randomnize(thlm,k,randthl,irandom,ih,jh,negval)
-        call randomnize(thl0,k,randthl,irandom,ih,jh,negval)
-      end do
-
-      do k=krandumin,krandumax
-        call randomnize(um  ,k,randu  ,irandom,ih,jh,negval)
-        call randomnize(u0  ,k,randu  ,irandom,ih,jh,negval)
-        call randomnize(vm  ,k,randu  ,irandom,ih,jh,negval)
-        call randomnize(v0  ,k,randu  ,irandom,ih,jh,negval)
-        call randomnize(wm  ,k,randu  ,irandom,ih,jh,negval)
-        call randomnize(w0  ,k,randu  ,irandom,ih,jh,negval)
-      end do
 
       svprof = 0.
       if(myid==0)then
@@ -613,15 +557,74 @@ contains
       call MPI_BCAST(wsvsurf,nsv   ,MY_REAL   ,0,comm3d,mpierr)
 
       call MPI_BCAST(svprof ,k1*nsv,MY_REAL   ,0,comm3d,mpierr)
-      do k=1,kmax
+      ! Initialize fields
+      if(lopenbc .and. linithetero) then! Openboundaries with heterogeneous initialisation
+        call openboundary_initfields()
+        do k = 1,kmax
+        do j = 1,j2
+        do i = 1,i2
+           ekm(i,j,k) = 0.0
+           ekh(i,j,k) = 0.0
+        end do
+        end do
+        end do
+      else
+        do k=1,kmax
         do j=1,j2
-          do i=1,i2
-            do n=1,nsv
-              sv0(i,j,k,n) = svprof(k,n)
-              svm(i,j,k,n) = svprof(k,n)
+        do i=1,i2
+          thl0(i,j,k) = thlprof(k)
+          thlm(i,j,k) = thlprof(k)
+          qt0 (i,j,k) = qtprof (k)
+          qtm (i,j,k) = qtprof (k)
+          u0  (i,j,k) = uprof  (k) - cu
+          um  (i,j,k) = uprof  (k) - cu
+          v0  (i,j,k) = vprof  (k) - cv
+          vm  (i,j,k) = vprof  (k) - cv
+          w0  (i,j,k) = 0.0
+          wm  (i,j,k) = 0.0
+          e120(i,j,k) = e12prof(k)
+          e12m(i,j,k) = e12prof(k)
+          ekm (i,j,k) = 0.0
+          ekh (i,j,k) = 0.0
+        end do
+        end do
+        end do
+        if(nsv>0) then
+          do k=1,kmax
+            do j=1,j2
+              do i=1,i2
+                do n=1,nsv
+                  sv0(i,j,k,n) = svprof(k,n)
+                  svm(i,j,k,n) = svprof(k,n)
+                end do
+              end do
             end do
           end do
-        end do
+        endif
+      endif
+    !---------------------------------------------------------------
+    !  1.2 randomnize fields
+    !---------------------------------------------------------------
+
+      krand  = min(krand,kmax)
+      negval = .False. ! No negative perturbations for qt (negative moisture is non physical)
+      do k = 1,krand
+        call randomnize(qtm ,k,randqt ,irandom,ih,jh,negval)
+        call randomnize(qt0 ,k,randqt ,irandom,ih,jh,negval)
+      end do
+      negval = .True. ! negative perturbations allowed
+      do k = 1,krand
+        call randomnize(thlm,k,randthl,irandom,ih,jh,negval)
+        call randomnize(thl0,k,randthl,irandom,ih,jh,negval)
+      end do
+
+      do k=krandumin,krandumax
+        call randomnize(um  ,k,randu  ,irandom,ih,jh,negval)
+        call randomnize(u0  ,k,randu  ,irandom,ih,jh,negval)
+        call randomnize(vm  ,k,randu  ,irandom,ih,jh,negval)
+        call randomnize(v0  ,k,randu  ,irandom,ih,jh,negval)
+        call randomnize(wm  ,k,randu  ,irandom,ih,jh,negval)
+        call randomnize(w0  ,k,randu  ,irandom,ih,jh,negval)
       end do
 
 !-----------------------------------------------------------------

@@ -342,15 +342,17 @@ contains
         & count=(/boundary(ib)%nx1,boundary(ib)%nx2,ntboundary/))
       if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
       ! Read sv
-      STATUS = NF90_INQ_VARID(NCID, 'sv'//boundary(ib)%name, VARID)
-      if(STATUS == NF90_ENOTVAR) then
-        boundary(ib)%sv = 0.
-        print *, "No boundary information for sv at boundary",ib,"Values set to 0"
-      else
-        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-        STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%sv, start=(/istart,1/), &
-          & count=(/boundary(ib)%nx1,boundary(ib)%nx2,ntboundary,nsv/))
-        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      if(nsv>0) then
+        STATUS = NF90_INQ_VARID(NCID, 'sv'//boundary(ib)%name, VARID)
+        if(STATUS == NF90_ENOTVAR) then
+          boundary(ib)%sv = 0.
+          print *, "No boundary information for sv at boundary",ib,"Values set to 0"
+        else
+          if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+          STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%sv, start=(/istart,1/), &
+            & count=(/boundary(ib)%nx1,boundary(ib)%nx2,ntboundary,nsv/))
+          if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        endif
       endif
       ! Read input for turbulent pertubations
       if(lsynturb) then

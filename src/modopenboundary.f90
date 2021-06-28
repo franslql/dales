@@ -49,20 +49,22 @@ contains
     ! Initialisation routine for openboundaries
     use modmpi, only : myidx, myidy, nprocx, nprocy
     use modglobal, only : imax,jmax,kmax,i1,j1,k1,dx,dy,dzf,itot,jtot,zf,zh,solver_id, &
-      & iadv_mom,iadv_thl,iadv_qt,iadv_tke,iadv_sv,nsv
+      & iadv_mom,iadv_thl,iadv_qt,iadv_tke,iadv_sv,nsv,cu,cv
     use modfields, only : rhobf
     implicit none
     integer :: i,j
     real :: yt(jmax),ym(j1)
 
     if(.not.lopenbc) return
-    ! Check if hypre solver is selected
+    ! Check for conflicting options
     if(solver_id /= 1) stop 'Openboundaries only possible with HYPRE pressure solver, change solver_id to 1'
     if(iadv_mom /=2) stop 'Only second order advection scheme supported with openboundaries, change iadv_mom to 2'
     if(iadv_thl /=2) stop 'Only second order advection scheme supported with openboundaries, change iadv_thl to 2'
     if(iadv_qt  /=2) stop 'Only second order advection scheme supported with openboundaries, change iadv_qt to 2'
     if(iadv_tke /=2) stop 'Only second order advection scheme supported with openboundaries, change iadv_tke to 2'
     if(any(iadv_sv(1:nsv)/=2)) stop 'Only second order advection scheme supported with openboundaries, change iadv_sv to 2'
+    if(cu/=0.) stop 'Translation velocity not allowed in combination with open boundaries, set cu to 0'
+    if(cv/=0.) stop 'Translation velocity not allowed in combination with open boundaries, set cv to 0'
     ! Check if boundary is present on process
     if(myidx==0)        lboundary(1) = .true.
     if(myidx==nprocx-1) lboundary(2) = .true.
@@ -123,12 +125,17 @@ contains
         boundary(i)%e12turb(boundary(i)%nx1,boundary(i)%nx2))
         boundary(i)%uturb = 0.; boundary(i)%vturb = 0.; boundary(i)%wturb = 0.
         boundary(i)%thlturb = 0.; boundary(i)%qtturb = 0.; boundary(i)%e12turb = 0.
+        if(nsv>0) then
+          allocate(boundary(i)%svturb(boundary(i)%nx1,boundary(i)%nx2,nsv))
+          boundary(i)%svturb = 0.
+        endif
     end do
     call initsynturb
   end subroutine initopenboundary
 
   subroutine exitopenboundary
     ! Exit routine for openboundaries
+    use modglobal, only : nsv
     implicit none
     integer :: i
     if(.not.lopenbc) return
@@ -139,17 +146,19 @@ contains
         boundary(i)%u,boundary(i)%v,boundary(i)%w,boundary(i)%uphasesingle,boundary(i)%uphase, &
         boundary(i)%radcorr,boundary(i)%radcorrsingle,boundary(i)%uturb,boundary(i)%vturb, &
           boundary(i)%wturb,boundary(i)%thlturb,boundary(i)%qtturb,boundary(i)%name,boundary(i)%e12turb)
+      if(nsv>0) deallocate(boundary(i)%sv,boundary(i)%svturb)
     end do
     deallocate(rhointi)
     call exitsynturb
   end subroutine exitopenboundary
 
   subroutine openboundary_initfields
-    use modglobal, only : imax,jmax,kmax,i1,j1,cexpnr
-    use modfields, only : u0,um,v0,vm,w0,wm,thl0,thlm,qt0,qtm,e120,e12m
-    use modmpi, only : myidx,myidy
+    use modglobal, only : imax,jmax,kmax,i1,j1,cexpnr,nsv
+    use modfields, only : u0,um,v0,vm,w0,wm,thl0,thlm,qt0,qtm,e120,e12m, sv0, svm, &
+      uprof,vprof,thlprof,qtprof,e12prof,svprof
+    use modmpi, only : myidx,myidy,myid
     implicit none
-    integer :: VARID,STATUS,NCID,mpierr,timeID
+    integer :: VARID,STATUS,NCID,mpierr,timeID,n
     integer, dimension(3) :: istart
     if(.not.lopenbc) return
     if(.not.linithetero) return
@@ -160,35 +169,74 @@ contains
     if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
     istart = (/myidx*imax+1,myidy*jmax+1,1/)
     STATUS = NF90_INQ_VARID(NCID,'u0', VARID)
-    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-    STATUS = NF90_GET_VAR (NCID, VARID,u0(2:i1,2:j1,1:kmax),start=istart,count=(/imax,jmax,kmax/))
-    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-    um = u0
+    if(STATUS == NF90_ENOTVAR) then
+      call take_prof(u0,um,uprof)
+      if(myid==0) print *, "u initialized with prof.inp"
+    else
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      STATUS = NF90_GET_VAR (NCID, VARID,u0(2:i1,2:j1,1:kmax),start=istart,count=(/imax,jmax,kmax/))
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      um = u0
+    endif
     STATUS = NF90_INQ_VARID(NCID,'v0', VARID)
-    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-    STATUS = NF90_GET_VAR (NCID, VARID,v0(2:i1,2:j1,1:kmax),start=istart,count=(/imax,jmax,kmax/))
-    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-    vm = v0
+    if(STATUS == NF90_ENOTVAR) then
+      call take_prof(v0,vm,vprof)
+      if(myid==0) print *, "v initialized with prof.inp"
+    else
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      STATUS = NF90_GET_VAR (NCID, VARID,v0(2:i1,2:j1,1:kmax),start=istart,count=(/imax,jmax,kmax/))
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      vm = v0
+    endif
     STATUS = NF90_INQ_VARID(NCID,'w0', VARID)
     if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
     STATUS = NF90_GET_VAR (NCID, VARID,w0(2:i1,2:j1,1:kmax),start=istart,count=(/imax,jmax,kmax/))
     if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
     wm = w0
     STATUS = NF90_INQ_VARID(NCID,'thl0', VARID)
-    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-    STATUS = NF90_GET_VAR (NCID, VARID,thl0(2:i1,2:j1,1:kmax),start=istart,count=(/imax,jmax,kmax/))
-    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-    thlm = thl0
+    if(STATUS == NF90_ENOTVAR) then
+      call take_prof(thl0,thlm,thlprof)
+      if(myid==0) print *, "thl initialized with prof.inp"
+    else
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      STATUS = NF90_GET_VAR (NCID, VARID,thl0(2:i1,2:j1,1:kmax),start=istart,count=(/imax,jmax,kmax/))
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      thlm = thl0
+    endif
     STATUS = NF90_INQ_VARID(NCID,'qt0', VARID)
-    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-    STATUS = NF90_GET_VAR (NCID, VARID,qt0(2:i1,2:j1,1:kmax),start=istart,count=(/imax,jmax,kmax/))
-    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-    qtm = qt0
+    if(STATUS == NF90_ENOTVAR) then
+      call take_prof(qt0,qtm,qtprof)
+      if(myid==0) print *, "qt initialized with prof.inp"
+    else
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      STATUS = NF90_GET_VAR (NCID, VARID,qt0(2:i1,2:j1,1:kmax),start=istart,count=(/imax,jmax,kmax/))
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      qtm = qt0
+    endif
     STATUS = NF90_INQ_VARID(NCID,'e120', VARID)
-    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-    STATUS = NF90_GET_VAR (NCID, VARID,e120(2:i1,2:j1,1:kmax),start=istart,count=(/imax,jmax,kmax/))
-    if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-    e12m = e120
+    if(STATUS == NF90_ENOTVAR) then
+      call take_prof(e120,e12m,e12prof)
+      if(myid==0) print *, "e12 initialized with prof.inp"
+    else
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      STATUS = NF90_GET_VAR (NCID, VARID,e120(2:i1,2:j1,1:kmax),start=istart,count=(/imax,jmax,kmax/))
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      e12m = e120
+    endif
+    if(nsv>0) then
+      STATUS = NF90_INQ_VARID(NCID,'sv0', VARID)
+      if(STATUS == NF90_ENOTVAR) then
+        do n = 1,nsv
+          call take_prof(sv0(:,:,:,n),svm(:,:,:,n),svprof(:,n))
+        end do
+        if(myid==0) print *, "sv initialized with scalar.inp"
+      else ! Initial field taken from initfields.inp
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        STATUS = NF90_GET_VAR (NCID, VARID,sv0(2:i1,2:j1,1:kmax,1),start=istart,count=(/imax,jmax,kmax,nsv/))
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        svm = sv0
+      endif
+    endif
     status = nf90_close(ncid)
     if (status /= nf90_noerr) call handle_err(status)
 
@@ -198,7 +246,7 @@ contains
   subroutine openboundary_readboundary
     use mpi
     use modglobal, only : dzf,kmax,cexpnr,imax,jmax,itot,jtot,k1,ntboundary, &
-      tboundary,dzh,dx,dy,i1,j1,i2,j2,kmax,xsize,ysize,zh
+      tboundary,dzh,dx,dy,i1,j1,i2,j2,kmax,xsize,ysize,zh,nsv
     use modfields, only : rhobf,rhobh,uprof,vprof,thlprof,qtprof,e12prof,u0,um,v0,vm,w0,wm
     use modmpi, only : myid,comm3d,myidy,myidx,MY_REAL,nprocs
     implicit none
@@ -234,6 +282,9 @@ contains
         boundary(ib)%v(boundary(ib)%nx1v,boundary(ib)%nx2v,ntboundary), &
         boundary(ib)%w(boundary(ib)%nx1w,boundary(ib)%nx2w,ntboundary), &
         )
+      if(nsv>0) then
+        allocate(boundary(ib)%sv(boundary(ib)%nx1,boundary(ib)%nx2,ntboundary,nsv))
+      endif
       if(lsynturb) then ! Allocate turbulent input fields
         allocate(boundary(ib)%u2(boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary), &
         & boundary(ib)%v2(boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary), &
@@ -290,6 +341,17 @@ contains
       STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%e12, start=istart, &
         & count=(/boundary(ib)%nx1,boundary(ib)%nx2,ntboundary/))
       if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      ! Read sv
+      STATUS = NF90_INQ_VARID(NCID, 'sv'//boundary(ib)%name, VARID)
+      if(STATUS == NF90_ENOTVAR) then
+        boundary(ib)%sv = 0.
+        print *, "No boundary information for sv at boundary",ib,"Values set to 0"
+      else
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        STATUS = NF90_GET_VAR (NCID, VARID, boundary(ib)%sv, start=(/istart,1/), &
+          & count=(/boundary(ib)%nx1,boundary(ib)%nx2,ntboundary,nsv/))
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      endif
       ! Read input for turbulent pertubations
       if(lsynturb) then
         ! Read u2
@@ -545,8 +607,8 @@ contains
     call openboundary_excjs(qtm  , 2,i1,2,j1,1,k1,ih,jh,.not.lboundary(1:4).or.lperiodic(1:4))
     call openboundary_excjs(qt0  , 2,i1,2,j1,1,k1,ih,jh,.not.lboundary(1:4).or.lperiodic(1:4))
     do n = 1,nsv
-      call openboundary_excjs(svm(:,:,:,n), 2,i1,2,j1,1,k1,ih,jh,(/.true.,.true.,.true.,.true./))
-      call openboundary_excjs(sv0(:,:,:,n), 2,i1,2,j1,1,k1,ih,jh,(/.true.,.true.,.true.,.true./))
+      call openboundary_excjs(svm(:,:,:,n), 2,i1,2,j1,1,k1,ih,jh,.not.lboundary(1:4).or.lperiodic(1:4))
+      call openboundary_excjs(sv0(:,:,:,n), 2,i1,2,j1,1,k1,ih,jh,.not.lboundary(1:4).or.lperiodic(1:4))
     end do
     ! Apply open boundaries for domain boundaries for full levels (ghost cells)
     do i = 1,5 ! Loop over boundaries
@@ -557,6 +619,10 @@ contains
       call applyboundaryf(qt0  ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%qt,boundary(i)%nx1,boundary(i)%nx2,1,boundary(i)%qtturb,profile=qt0av)
       call applyboundaryf(e12m ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%e12,boundary(i)%nx1,boundary(i)%nx2,1,boundary(i)%e12turb)
       call applyboundaryf(e120 ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%e12,boundary(i)%nx1,boundary(i)%nx2,1,boundary(i)%e12turb)
+      do n = 1,nsv
+        call applyboundaryf(svm ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%sv,boundary(i)%nx1,boundary(i)%nx2,1,boundary(i)%svturb)
+        call applyboundaryf(sv0 ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%sv,boundary(i)%nx1,boundary(i)%nx2,1,boundary(i)%svturb)
+      end do
       if(i/=1.and.i/=2) call applyboundaryf(um,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%u,boundary(i)%nx1u,boundary(i)%nx2u,0,boundary(i)%uturb,profile=u0av)
       if(i/=1.and.i/=2) call applyboundaryf(u0,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%u,boundary(i)%nx1u,boundary(i)%nx2u,0,boundary(i)%uturb,profile=u0av)
       if(i/=3.and.i/=4) call applyboundaryf(vm,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%v,boundary(i)%nx1v,boundary(i)%nx2v,0,boundary(i)%vturb,profile=v0av)
@@ -1291,6 +1357,23 @@ contains
       end do
     end select
   end subroutine radcorrection
+
+  subroutine take_prof(field0,fieldm,prof)
+    use modglobal, only : i1,j1,k1,ih,jh,kmax
+    implicit none
+    real, intent(inout), dimension(2-ih:i1+ih,2-jh:j1+jh,k1) :: field0,fieldm
+    real, intent(in), dimension(k1) :: prof
+    integer :: i,j,k
+    do k=1,kmax
+      do j=2,j1
+        do i=2,i1
+          field0(i,j,k) = prof(k)
+          fieldm(i,j,k) = prof(k)
+        end do
+      end do
+    end do
+  end subroutine take_prof
+
   subroutine handle_err(errcode)
 
   implicit none

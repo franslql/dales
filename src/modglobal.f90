@@ -203,7 +203,8 @@ save
       type boundary_type
         integer :: nx1,nx2,nx1patch,nx2patch,nx1u,nx2u,nx1v,nx2v,nx1w,nx2w
         real, allocatable, dimension(:,:,:) :: u,v,w,thl,qt,e12, &
-          & u2,v2,w2,uv,uw,vw,thl2,qt2,wthl,wqt,ci
+          & u2,v2,w2,uv,uw,vw,thl2,qt2,wthl,wqt,ci,svturb
+        real, allocatable, dimension(:,:,:,:) :: sv
         real, allocatable, dimension(:,:) :: radcorr,uphase,uphasesingle, &
           radcorrsingle,uturb,vturb,wturb,thlturb,qtturb,e12turb!,randqt,randthl
         real, allocatable, dimension(:,:,:,:) :: eigvec

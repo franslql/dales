@@ -946,7 +946,7 @@ contains
     real, intent(in), dimension(k1), optional :: profile ! optional for top boundary to take gradient into account
     real, intent(inout), dimension(sx-ih:ex+ih,sy-jh:ey+jh,sz:ez) :: a
     integer :: i,j,k,itp,itm,kav=5,itpn,itmn
-    real :: coefdir,coefneu,tp,tm,fp,fm,fpn,fmn,ddz,valtarget,un,e
+    real :: coefdir,coefneu,tp,tm,fp,fm,fpn,fmn,ddz,valtarget,un,e,un2
 
     ! Get interpolation coefficients for boundary input
     itm=1
@@ -975,6 +975,17 @@ contains
           if(un<=0) then ! Homogeneous Neumann outflow
             a(sx-1,j+1,k)=a(sx,j+1,k)
           else ! Robin inflow conditions
+            un2 = un**2
+            if(lboundary(3).and.j==1.and.v0(sx,2,min(k,kmax))>0) then
+              un2 = un2+v0(sx,2,min(k,kmax))**2
+            endif
+            if(lboundary(4).and.j==nx1.and.v0(sx,j2,min(k,kmax))<0) then
+              un2 = un2+v0(sx,j2,min(k,kmax))**2
+            endif
+            if(lboundary(5).and.k==nx2.and.w0(sx,min(j+1,j1),k1)<0) then
+              un2 = un2+w0(sx,min(j+1,j1),k1)**2
+            endif
+            un = un/sqrt(un2)
             e = e120(sx,min(j+1,j1),min(k,kmax))
             coefdir = abs(un)**pbc
             coefneu = -tauh*un*(abs(un)**pbc+e**pbc)
@@ -992,6 +1003,17 @@ contains
           if(un>=0) then ! Homogeneous Neumann outflow
             a(ex+1,j+1,k)=a(ex,j+1,k)
           else ! Robin inflow conditions
+            un2 = un**2
+            if(lboundary(3).and.j==1.and.v0(i1,2,min(k,kmax))>0) then
+              un2 = un2+v0(i1,2,min(k,kmax))**2
+            endif
+            if(lboundary(4).and.j==nx1.and.v0(i1,j2,min(k,kmax))<0) then
+              un2 = un2+v0(i1,j2,min(k,kmax))**2
+            endif
+            if(lboundary(5).and.k==nx2.and.w0(i1,min(j+1,j1),k1)<0) then
+              un2 = un2+w0(i1,min(j+1,j1),k1)**2
+            endif
+            un = un/sqrt(un2)
             e = e120(ex,min(j+1,j1),min(k,kmax))
             coefdir = abs(un)**pbc
             coefneu = -tauh*un*(abs(un)**pbc+e**pbc)
@@ -1010,6 +1032,17 @@ contains
           if(un<=0) then ! Homogeneous Neumann outflow
             a(i+1,sy-1,k)=a(i+1,sy,k)
           else ! Robin inflow conditions
+            un2 = un**2
+            if(lboundary(1).and.i==1.and.u0(2,sy,min(k,kmax))>0) then
+              un2 = un2+u0(2,sy,min(k,kmax))**2
+            endif
+            if(lboundary(2).and.i==nx1.and.u0(i2,sy,min(k,kmax))<0) then
+              un2 = un2+u0(i2,sy,min(k,kmax))**2
+            endif
+            if(lboundary(5).and.k==nx2.and.w0(min(i+1,i1),sy,k1)<0) then
+              un2 = un2+w0(min(i+1,i1),sy,k1)**2
+            endif
+            un = un/sqrt(un2)
             e = e120(min(i+1,i1),sy,min(k,kmax))
             coefdir = abs(un)**pbc
             coefneu = -tauh*un*(abs(un)**pbc+e**pbc)
@@ -1027,6 +1060,17 @@ contains
           if(un>=0) then ! Homogeneous Neumann outflow
             a(i+1,ey+1,k)=a(i+1,ey,k)
           else ! Robin inflow conditions
+            un2 = un**2
+            if(lboundary(1).and.i==1.and.u0(2,j1,min(k,kmax))>0) then
+              un2 = un2+u0(2,j1,min(k,kmax))**2
+            endif
+            if(lboundary(2).and.i==nx1.and.u0(i2,j1,min(k,kmax))<0) then
+              un2 = un2+u0(i2,j1,min(k,kmax))**2
+            endif
+            if(lboundary(5).and.k==nx2.and.w0(min(i+1,i1),j1,k1)<0) then
+              un2 = un2+w0(min(i+1,i1),j1,k1)**2
+            endif
+            un = un/sqrt(un2)
             e = e120(min(i+1,i1),ey,min(k,kmax))
             coefdir = abs(un)**pbc
             coefneu = -tauh*un*(abs(un)**pbc+e**pbc)
@@ -1051,6 +1095,20 @@ contains
           if(un>=0) then ! Neumann outflow
             a(i+1,j+1,ez)=ddz*dzh(ez)+a(i+1,j+1,ez-1)
           else ! Robin inflow conditions
+            un2 = un**2
+            if(lboundary(1).and.i==1.and.u0(2,min(j+1,j1),kmax)>0) then
+              un2 = un2+u0(2,min(j+1,j1),kmax)**2
+            endif
+            if(lboundary(2).and.i==nx1.and.u0(i2,min(j+1,j1),kmax)<0) then
+              un2 = un2+u0(i2,min(j+1,j1),kmax)**2
+            endif
+            if(lboundary(3).and.j==1.and.v0(min(i+1,i1),2,kmax)>0) then
+              un2 = un2+v0(min(i+1,i1),2,kmax)**2
+            endif
+            if(lboundary(4).and.j==nx2.and.v0(min(i+1,i1),j2,kmax)<0) then
+              un2 = un2+v0(min(i+1,i1),j2,kmax)**2
+            endif
+            un = un/sqrt(un2)
             e = e120(min(i+1,i1),min(j+1,j1),ez-1)
             coefdir = abs(un)**pbc
             coefneu = -tauh*un*(abs(un)**pbc+e**pbc)

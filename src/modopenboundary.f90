@@ -622,8 +622,8 @@ contains
       call applyboundaryf(e12m ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%e12,boundary(i)%nx1,boundary(i)%nx2,1,boundary(i)%e12turb)
       call applyboundaryf(e120 ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%e12,boundary(i)%nx1,boundary(i)%nx2,1,boundary(i)%e12turb)
       do n = 1,nsv
-        call applyboundaryf(svm ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%sv,boundary(i)%nx1,boundary(i)%nx2,1,boundary(i)%svturb)
-        call applyboundaryf(sv0 ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%sv,boundary(i)%nx1,boundary(i)%nx2,1,boundary(i)%svturb)
+        call applyboundaryf(svm(:,:,:,n) ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%sv(:,:,:,n),boundary(i)%nx1,boundary(i)%nx2,1,boundary(i)%svturb(:,:,n))
+        call applyboundaryf(sv0(:,:,:,n) ,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%sv(:,:,:,n),boundary(i)%nx1,boundary(i)%nx2,1,boundary(i)%svturb(:,:,n))
       end do
       if(i/=1.and.i/=2) call applyboundaryf(um,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%u,boundary(i)%nx1u,boundary(i)%nx2u,0,boundary(i)%uturb,profile=u0av)
       if(i/=1.and.i/=2) call applyboundaryf(u0,2,i1,2,j1,1,k1,ih,jh,i,boundary(i)%u,boundary(i)%nx1u,boundary(i)%nx2u,0,boundary(i)%uturb,profile=u0av)
@@ -1018,7 +1018,6 @@ contains
             coefdir = abs(un)**pbc
             coefneu = -tauh*un*(abs(un)**pbc+e**pbc)
             valtarget = (fp*val(j,k,itp)+fm*val(j,k,itm)+turb(j,k))*coefdir
-            if(lmax0==1) valtarget = max(valtarget,0.)
             a(ex+1,j+1,k) = ( 2.*dx*valtarget - &
               a(ex,j+1,k)*(coefdir*dx-2.*coefneu) ) / (coefdir*dx+2.*coefneu)
             if(lmax0==1) a(ex+1,j+1,k) = max(a(ex+1,j+1,k),0.)

@@ -768,6 +768,7 @@ contains
       ! CvH - only do this for fixed timestepping. In adaptive dt comes from restartfile
       if(ladaptive .eqv. .false.) rdt=dtmax
       call baseprofs !call baseprofs
+      if(lopenbc) call openboundary_readboundary
 
     end if  ! end if (.not. warmstart)
 

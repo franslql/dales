@@ -246,7 +246,7 @@ contains
   subroutine openboundary_readboundary
     use mpi
     use modglobal, only : dzf,kmax,cexpnr,imax,jmax,itot,jtot,k1,ntboundary, &
-      tboundary,dzh,dx,dy,i1,j1,i2,j2,kmax,xsize,ysize,zh,nsv
+      tboundary,dzh,dx,dy,i1,j1,i2,j2,kmax,xsize,ysize,zh,nsv,lwarmstart
     use modfields, only : rhobf,rhobh,uprof,vprof,thlprof,qtprof,e12prof,u0,um,v0,vm,w0,wm
     use modmpi, only : myid,comm3d,myidy,myidx,MY_REAL,nprocs
     implicit none
@@ -537,51 +537,53 @@ contains
     call MPI_ALLREDUCE(sumdiv,sumdivtot,ntboundary,MY_REAL,MPI_SUM,comm3d,mpierr)
     if(myid==0) print *, 'first,mean and max abs divergence after correction',sumdivtot(1),sum(abs(sumdivtot))/ntboundary,maxval(abs(sumdivtot))
     ! Copy data to boundary information
-    if(lboundary(1).and..not.lperiodic(1)) then
-      sy = myidy*jmax+1; ey = sy+jmax-1
-      do j = 2,j1
-        do k = 1,kmax
-          u0(2,j,k) = boundary(1)%u(j-1,k,1)
-          um(2,j,k) = boundary(1)%u(j-1,k,1)
-        end do
-      end do
-    endif
-    if(lboundary(2).and..not.lperiodic(2)) then
-      sy = myidy*jmax+1; ey = sy+jmax-1
-      do j = 2,j1
-        do k = 1,kmax
-          u0(i2,j,k) = boundary(2)%u(j-1,k,1)
-          um(i2,j,k) = boundary(2)%u(j-1,k,1)
-        end do
-      end do
-    endif
-    if(lboundary(3).and..not.lperiodic(3)) then
-      sx = myidx*imax+1; ex = sx+imax-1
-      do i = 2,i1
-        do k = 1,kmax
-          v0(i,2,k) = boundary(3)%v(i-1,k,1)
-          vm(i,2,k) = boundary(3)%v(i-1,k,1)
-        end do
-      end do
-    endif
-    if(lboundary(4).and..not.lperiodic(4)) then
-      sx = myidx*imax+1; ex = sx+imax-1
-      do i = 2,i1
-        do k = 1,kmax
-          v0(i,j2,k) = boundary(4)%v(i-1,k,1)
-          vm(i,j2,k) = boundary(4)%v(i-1,k,1)
-        end do
-      end do
-    endif
-    if(lboundary(5).and..not.lperiodic(5)) then
-      sx = myidx*imax+1; ex = sx+imax-1
-      sy = myidy*jmax+1; ey = sy+jmax-1
-      do i = 2,i1
+    if(.not.lwarmstart) then
+      if(lboundary(1).and..not.lperiodic(1)) then
+        sy = myidy*jmax+1; ey = sy+jmax-1
         do j = 2,j1
-          w0(i,j,k1) = boundary(5)%w(i-1,j-1,1)
-          wm(i,j,k1) = boundary(5)%w(i-1,j-1,1)
+          do k = 1,kmax
+            u0(2,j,k) = boundary(1)%u(j-1,k,1)
+            um(2,j,k) = boundary(1)%u(j-1,k,1)
+          end do
         end do
-      end do
+      endif
+      if(lboundary(2).and..not.lperiodic(2)) then
+        sy = myidy*jmax+1; ey = sy+jmax-1
+        do j = 2,j1
+          do k = 1,kmax
+            u0(i2,j,k) = boundary(2)%u(j-1,k,1)
+            um(i2,j,k) = boundary(2)%u(j-1,k,1)
+          end do
+        end do
+      endif
+      if(lboundary(3).and..not.lperiodic(3)) then
+        sx = myidx*imax+1; ex = sx+imax-1
+        do i = 2,i1
+          do k = 1,kmax
+            v0(i,2,k) = boundary(3)%v(i-1,k,1)
+            vm(i,2,k) = boundary(3)%v(i-1,k,1)
+          end do
+        end do
+      endif
+      if(lboundary(4).and..not.lperiodic(4)) then
+        sx = myidx*imax+1; ex = sx+imax-1
+        do i = 2,i1
+          do k = 1,kmax
+            v0(i,j2,k) = boundary(4)%v(i-1,k,1)
+            vm(i,j2,k) = boundary(4)%v(i-1,k,1)
+          end do
+        end do
+      endif
+      if(lboundary(5).and..not.lperiodic(5)) then
+        sx = myidx*imax+1; ex = sx+imax-1
+        sy = myidy*jmax+1; ey = sy+jmax-1
+        do i = 2,i1
+          do j = 2,j1
+            w0(i,j,k1) = boundary(5)%w(i-1,j-1,1)
+            wm(i,j,k1) = boundary(5)%w(i-1,j-1,1)
+          end do
+        end do
+      endif
     endif
     allocate(rhointi(k1))
     rhointi = 1./(rhobf*dzf)

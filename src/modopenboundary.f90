@@ -462,7 +462,7 @@ contains
       endif
     end do
     call MPI_ALLREDUCE(sumdiv,sumdivtot,ntboundary,MY_REAL,MPI_SUM,comm3d,mpierr)
-    if(myid==0) print *, 'mean and max abs divergence',sum(abs(sumdivtot))/ntboundary,maxval(abs(sumdivtot))
+    if(myid==0) print *, 'First, mean and max abs divergence',sumdivtot(1),sum(abs(sumdivtot))/ntboundary,maxval(abs(sumdivtot))
     ! Spread divergence over boundaries
     do it = 1,ntboundary
       if(lboundary(1)) then
@@ -535,7 +535,7 @@ contains
       endif
     end do
     call MPI_ALLREDUCE(sumdiv,sumdivtot,ntboundary,MY_REAL,MPI_SUM,comm3d,mpierr)
-    if(myid==0) print *, 'first,mean and max abs divergence after correction',sumdivtot(1),sum(abs(sumdivtot))/ntboundary,maxval(abs(sumdivtot))
+    if(myid==0) print *, 'First, mean and max abs divergence after correction',sumdivtot(1),sum(abs(sumdivtot))/ntboundary,maxval(abs(sumdivtot))
     ! Copy data to boundary information
     if(.not.lwarmstart) then
       if(lboundary(1).and..not.lperiodic(1)) then

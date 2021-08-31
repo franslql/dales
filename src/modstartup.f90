@@ -82,7 +82,6 @@ contains
     use modchem,           only : initchem
     use modversion,        only : git_version
     use modopenboundary,   only : initopenboundary
-    use modchecksim,       only : chkdiv
 
     implicit none
     integer :: ierr
@@ -303,7 +302,6 @@ contains
       call initboundary
     else
       call initopenboundary
-      call chkdiv
     endif
     call initthermodynamics
     call initradiation
@@ -437,6 +435,7 @@ contains
     use modtestbed,        only : ltestbed,tb_ps,tb_thl,tb_qt,tb_u,tb_v,tb_w,tb_ug,tb_vg,&
                                   tb_dqtdxls,tb_dqtdyls,tb_qtadv,tb_thladv
     use modopenboundary,   only : openboundary_ghost,openboundary_readboundary,openboundary_initfields
+    use modchecksim,       only : chkdiv
 
     integer i,j,k,n
     logical negval !switch to allow or not negative values in randomnization
@@ -672,6 +671,7 @@ contains
       if(lopenbc) then
         call openboundary_readboundary
         call openboundary_ghost
+        call chkdiv
       else
         call boundary
       endif
@@ -770,7 +770,10 @@ contains
       ! CvH - only do this for fixed timestepping. In adaptive dt comes from restartfile
       if(ladaptive .eqv. .false.) rdt=dtmax
       call baseprofs !call baseprofs
-      if(lopenbc) call openboundary_readboundary
+      if(lopenbc) then
+        call openboundary_readboundary
+        call chkdiv
+      endif
 
     end if  ! end if (.not. warmstart)
 

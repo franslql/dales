@@ -117,8 +117,8 @@ contains
 
 ! directions 1 and 2 are chosen periodic
 
-    periods(1) = .true.
-    periods(2) = .true.
+    !periods(1) = .true.
+    !periods(2) = .true.
 
 ! find suitable # procs in each direction
 

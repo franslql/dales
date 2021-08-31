@@ -301,9 +301,9 @@ contains
 
     if(.not.lopenbc) then
       call initboundary
-      call chkdiv
     else
       call initopenboundary
+      call chkdiv
     endif
     call initthermodynamics
     call initradiation

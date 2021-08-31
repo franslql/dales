@@ -82,6 +82,7 @@ contains
     use modchem,           only : initchem
     use modversion,        only : git_version
     use modopenboundary,   only : initopenboundary
+    use modchecksim,       only : chkdiv
 
     implicit none
     integer :: ierr
@@ -300,6 +301,7 @@ contains
 
     if(.not.lopenbc) then
       call initboundary
+      call chkdiv
     else
       call initopenboundary
     endif

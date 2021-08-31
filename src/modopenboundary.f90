@@ -470,7 +470,7 @@ contains
         else
           divnew = sumdiv
         endif
-        if(abs(sumdiv)<maxdiv .or. iter>maxiter) then
+        if(abs(sumdiv)<maxdiv .or. iter>=maxiter) then
           if(myid==0) print *, 'it,input,corrected,niter',it,divold,divnew,iter
           exit
         endif

@@ -57,7 +57,7 @@ contains
 
     if(.not.lopenbc) return
     ! Check for conflicting options
-    if(solver_id /= 1 .or. solver_id /= 2) stop 'Openboundaries only possible with HYPRE pressure solver, change solver_id to 1 or 2'
+    if(solver_id /= 1 .and. solver_id /= 2) stop 'Openboundaries only possible with HYPRE pressure solver, change solver_id to 1 or 2'
     if(iadv_mom /=2) stop 'Only second order advection scheme supported with openboundaries, change iadv_mom to 2'
     if(iadv_thl /=2) stop 'Only second order advection scheme supported with openboundaries, change iadv_thl to 2'
     if(iadv_qt  /=2) stop 'Only second order advection scheme supported with openboundaries, change iadv_qt to 2'

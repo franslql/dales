@@ -47,7 +47,7 @@ integer :: nx1max,nx2max
 contains
   subroutine initopenboundary
     ! Initialisation routine for openboundaries
-    use modmpi, only : myidx, myidy, nprocx, nprocy
+    use modmpi, only : myidx, myidy, nprocx, nprocy,myid
     use modglobal, only : imax,jmax,kmax,i1,j1,k1,dx,dy,dzf,itot,jtot,zf,zh,solver_id, &
       & iadv_mom,iadv_thl,iadv_qt,iadv_tke,iadv_sv,nsv,cu,cv
     use modfields, only : rhobf
@@ -251,12 +251,13 @@ contains
     use modfields, only : rhobf,rhobh,uprof,vprof,thlprof,qtprof,e12prof,u0,um,v0,vm,w0,wm
     use modmpi, only : myid,comm3d,myidy,myidx,MY_REAL,nprocs
     implicit none
-    integer :: it,i,j,k,ib,sy,sx,ey,ex,ip
+    integer :: it,i,j,k,ib,sy,sx,ey,ex,ip,iter
+    integer,parameter :: maxiter = 20
+    real,parameter :: maxdiv = 1e-10
     character(len = nf90_max_name) :: RecordDimName
     integer :: VARID,STATUS,NCID,mpierr,timeID
     integer, dimension(3) :: istart
-    real,dimension(:),allocatable :: sumdiv,sumdivtot
-    real :: divpart
+    real :: sumdiv,divold,divnew,div,divpart
 
     if(.not.lopenbc) return
     !--- open nc file ---
@@ -421,122 +422,87 @@ contains
     end do
     status = nf90_close(ncid)
     if (status /= nf90_noerr) call handle_err(status)
-
-    ! Check divergence of data
-    allocate(sumdiv(ntboundary)); sumdiv = 0.
-    allocate(sumdivtot(ntboundary)); sumdivtot = 0.
+    ! Divergence correction
+    print *, "Start divergence correction"
     do it = 1,ntboundary
-      if(lboundary(1)) then
-        do j = 1,jmax
-          do k = 1,kmax
-            sumdiv(it) = sumdiv(it) - rhobf(k)*boundary(1)%u(j,k,it)*dzf(k)*dy
-          end do
-        end do
-      endif
-      if(lboundary(2)) then
-        do j = 1,jmax
-          do k = 1,kmax
-            sumdiv(it) = sumdiv(it) + rhobf(k)*boundary(2)%u(j,k,it)*dzf(k)*dy
-          end do
-        end do
-      endif
-      if(lboundary(3)) then
-        do i = 1,imax
-          do k = 1,kmax
-            sumdiv(it) = sumdiv(it) - rhobf(k)*boundary(3)%v(i,k,it)*dzf(k)*dx
-          end do
-        end do
-      endif
-      if(lboundary(4)) then
-        do i = 1,imax
-          do k = 1,kmax
-            sumdiv(it) = sumdiv(it) + rhobf(k)*boundary(4)%v(i,k,it)*dzf(k)*dx
-          end do
-        end do
-      endif
-      if(lboundary(5)) then
-        do i = 1,imax
+      iter = 0
+      do while(.True.)
+        ! Calculate divergence
+        div = 0.
+        if(lboundary(1)) then
           do j = 1,jmax
-            sumdiv(it) = sumdiv(it) + rhobh(k1)*boundary(5)%w(i,j,it)*dx*dy
+            do k = 1,kmax
+              div = div - rhobf(k)*boundary(1)%u(j,k,it)*dzf(k)*dy
+            end do
           end do
-        end do
-      endif
-    end do
-    call MPI_ALLREDUCE(sumdiv,sumdivtot,ntboundary,MY_REAL,MPI_SUM,comm3d,mpierr)
-    if(myid==0) print *, 'First, mean and max abs divergence',sumdivtot(1),sum(abs(sumdivtot))/ntboundary,maxval(abs(sumdivtot))
-    ! Spread divergence over boundaries
-    do it = 1,ntboundary
-      if(lboundary(1)) then
-        do k = 1,kmax
-          divpart = sumdivtot(it)*ysize*dzf(k)/(xsize*ysize+2*xsize*zh(k1)+2*ysize*zh(k1))
-          boundary(1)%u(:,k,it)=boundary(1)%u(:,k,it)+divpart/(rhobf(k)*ysize*dzf(k))
-        end do
-      endif
-      if(lboundary(2)) then
-        do k = 1,kmax
-          divpart = sumdivtot(it)*ysize*dzf(k)/(xsize*ysize+2*xsize*zh(k1)+2*ysize*zh(k1))
-          boundary(2)%u(:,k,it)=boundary(2)%u(:,k,it)-divpart/(rhobf(k)*ysize*dzf(k))
-        end do
-      endif
-      if(lboundary(3)) then
-        do k = 1,kmax
-          divpart = sumdivtot(it)*xsize*dzf(k)/(xsize*ysize+2*xsize*zh(k1)+2*ysize*zh(k1))
-          boundary(3)%v(:,k,it)=boundary(3)%v(:,k,it)+divpart/(rhobf(k)*dzf(k)*xsize)
-        end do
-      endif
-      if(lboundary(4)) then
-        do k = 1,kmax
-          divpart = sumdivtot(it)*xsize*dzf(k)/(xsize*ysize+2*xsize*zh(k1)+2*ysize*zh(k1))
-          boundary(4)%v(:,k,it)=boundary(4)%v(:,k,it)-divpart/(rhobf(k)*xsize*dzf(k))
-        enddo
-      endif
-      if(lboundary(5)) then
-        divpart = sumdivtot(it)*xsize*ysize/(xsize*ysize+2*xsize*zh(k1)+2*ysize*zh(k1))
-        boundary(5)%w(:,:,it)=boundary(5)%w(:,:,it)-divpart/(rhobh(k1)*xsize*ysize)
-      endif
-    end do
-    ! Recheck divergence of data
-    sumdiv = 0.
-    sumdivtot = 0.
-    do it = 1,ntboundary
-      if(lboundary(1)) then
-        do j = 1,jmax
-          do k = 1,kmax
-            sumdiv(it) = sumdiv(it) - rhobf(k)*boundary(1)%u(j,k,it)*dzf(k)*dy
-          end do
-        end do
-      endif
-      if(lboundary(2)) then
-        do j = 1,jmax
-          do k = 1,kmax
-            sumdiv(it) = sumdiv(it) + rhobf(k)*boundary(2)%u(j,k,it)*dzf(k)*dy
-          end do
-        end do
-      endif
-      if(lboundary(3)) then
-        do i = 1,imax
-          do k = 1,kmax
-            sumdiv(it) = sumdiv(it) - rhobf(k)*boundary(3)%v(i,k,it)*dzf(k)*dx
-          end do
-        end do
-      endif
-      if(lboundary(4)) then
-        do i = 1,imax
-          do k = 1,kmax
-            sumdiv(it) = sumdiv(it) + rhobf(k)*boundary(4)%v(i,k,it)*dzf(k)*dx
-          end do
-        end do
-      endif
-      if(lboundary(5)) then
-        do i = 1,imax
+        endif
+        if(lboundary(2)) then
           do j = 1,jmax
-            sumdiv(it) = sumdiv(it) + rhobh(k1)*boundary(5)%w(i,j,it)*dx*dy
+            do k = 1,kmax
+              div = div + rhobf(k)*boundary(2)%u(j,k,it)*dzf(k)*dy
+            end do
           end do
-        end do
-      endif
+        endif
+        if(lboundary(3)) then
+          do i = 1,imax
+            do k = 1,kmax
+              div = div - rhobf(k)*boundary(3)%v(i,k,it)*dzf(k)*dx
+            end do
+          end do
+        endif
+        if(lboundary(4)) then
+          do i = 1,imax
+            do k = 1,kmax
+              div = div + rhobf(k)*boundary(4)%v(i,k,it)*dzf(k)*dx
+            end do
+          end do
+        endif
+        if(lboundary(5)) then
+          do i = 1,imax
+            do j = 1,jmax
+              div = div + rhobh(k1)*boundary(5)%w(i,j,it)*dx*dy
+            end do
+          end do
+        endif
+        call MPI_ALLREDUCE(div,sumdiv,1,MY_REAL,MPI_SUM,comm3d,mpierr)
+        if(iter==0) then
+          divold = sumdiv
+        else
+          divnew = sumdiv
+        endif
+        if(abs(sumdiv)<maxdiv .or. iter>maxiter) then
+          print *, 'it,input,corrected,niter',it,divold,divnew,iter
+          exit
+        endif
+        iter = iter+1
+        ! Start correction, spread divergence over lateral boundaries
+        if(lboundary(1)) then
+          do k = 1,kmax
+            divpart = sumdiv*ysize*dzf(k)/(2*xsize*zh(k1)+2*ysize*zh(k1))
+            boundary(1)%u(:,k,it)=boundary(1)%u(:,k,it)+divpart/(rhobf(k)*ysize*dzf(k))
+          end do
+        endif
+        if(lboundary(2)) then
+          do k = 1,kmax
+            divpart = sumdiv*ysize*dzf(k)/(2*xsize*zh(k1)+2*ysize*zh(k1))
+            boundary(2)%u(:,k,it)=boundary(2)%u(:,k,it)-divpart/(rhobf(k)*ysize*dzf(k))
+          end do
+        endif
+        if(lboundary(3)) then
+          do k = 1,kmax
+            divpart = sumdiv*xsize*dzf(k)/(2*xsize*zh(k1)+2*ysize*zh(k1))
+            boundary(3)%v(:,k,it)=boundary(3)%v(:,k,it)+divpart/(rhobf(k)*dzf(k)*xsize)
+          end do
+        endif
+        if(lboundary(4)) then
+          do k = 1,kmax
+            divpart = sumdiv*xsize*dzf(k)/(2*xsize*zh(k1)+2*ysize*zh(k1))
+            boundary(4)%v(:,k,it)=boundary(4)%v(:,k,it)-divpart/(rhobf(k)*xsize*dzf(k))
+          enddo
+        endif
+      end do
     end do
-    call MPI_ALLREDUCE(sumdiv,sumdivtot,ntboundary,MY_REAL,MPI_SUM,comm3d,mpierr)
-    if(myid==0) print *, 'First, mean and max abs divergence after correction',sumdivtot(1),sum(abs(sumdivtot))/ntboundary,maxval(abs(sumdivtot))
+    print *, "Finished divergence correction"
     ! Copy data to boundary information
     if(.not.lwarmstart) then
       if(lboundary(1).and..not.lperiodic(1)) then
@@ -588,7 +554,6 @@ contains
     endif
     allocate(rhointi(k1))
     rhointi = 1./(rhobf*dzf)
-    deallocate(sumdiv,sumdivtot)
   end subroutine openboundary_readboundary
 
   subroutine openboundary_ghost

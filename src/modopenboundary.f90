@@ -423,7 +423,7 @@ contains
     status = nf90_close(ncid)
     if (status /= nf90_noerr) call handle_err(status)
     ! Divergence correction
-    print *, "Start divergence correction"
+    if(myid==0) print *, "Start divergence correction"
     do it = 1,ntboundary
       iter = 0
       do while(.True.)
@@ -471,7 +471,7 @@ contains
           divnew = sumdiv
         endif
         if(abs(sumdiv)<maxdiv .or. iter>maxiter) then
-          print *, 'it,input,corrected,niter',it,divold,divnew,iter
+          if(myid==0) print *, 'it,input,corrected,niter',it,divold,divnew,iter
           exit
         endif
         iter = iter+1
@@ -502,7 +502,7 @@ contains
         endif
       end do
     end do
-    print *, "Finished divergence correction"
+    if(myid==0) print *, "Finished divergence correction"
     ! Copy data to boundary information
     if(.not.lwarmstart) then
       if(lboundary(1).and..not.lperiodic(1)) then

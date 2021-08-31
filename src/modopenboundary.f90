@@ -110,6 +110,7 @@ contains
     boundary(3)%nx1patch = nxpatch; boundary(3)%nx2patch = nzpatch
     boundary(4)%nx1patch = nxpatch; boundary(4)%nx2patch = nzpatch
     boundary(5)%nx1patch = nxpatch; boundary(5)%nx2patch = nypatch
+    if(myid==0) print *,"dx/dxint,dy/dyint,nxpatch,nypatch",int(dx/dxint),int(dy/dyint),nxpatch,nypatch
     ! Allocate phase velocity, correction term radiation boundaries and pertubation fields
     do i = 1,5
       if(.not.lboundary(i) .or. lperiodic(i)) cycle ! Open boundary not present

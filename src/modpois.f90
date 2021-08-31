@@ -126,10 +126,10 @@ contains
       call solve_hypre(p, converged)
       if (.not. converged) then
         if (myid == 0) then
-          write (*,*) 'Not converged, tried again with new initial guess p'
+          write (*,*) 'Not converged'
         endif
-        call set_initial_guess(p)
-        call solve_hypre(p, converged)
+        !call set_initial_guess(p)
+        !call solve_hypre(p, converged)
         !call fillps
         ! Forward FFT
         !call fft2df(p, Fp)

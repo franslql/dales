@@ -57,7 +57,7 @@ contains
 
     if(.not.lopenbc) return
     ! Check for conflicting options
-    if(solver_id /= 1 .and. solver_id /= 2) stop 'Openboundaries only possible with HYPRE pressure solver, change solver_id to 1 or 2'
+    if(solver_id == 0 .or. solver_id == 100) stop 'Openboundaries only possible with HYPRE pressure solver, change solver_id'
     if(iadv_mom /=2) stop 'Only second order advection scheme supported with openboundaries, change iadv_mom to 2'
     if(iadv_thl /=2) stop 'Only second order advection scheme supported with openboundaries, change iadv_thl to 2'
     if(iadv_qt  /=2) stop 'Only second order advection scheme supported with openboundaries, change iadv_qt to 2'
@@ -471,7 +471,7 @@ contains
           divnew = sumdiv
         endif
         if(abs(sumdiv)<maxdiv .or. iter>=maxiter) then
-          if(myid==0) print *, 'it,input,corrected,niter',it,divold,divnew,iter
+          if(myid==0) print *, 't,input,corrected,niter',tboundary(it),divold,divnew,iter
           exit
         endif
         iter = iter+1
@@ -506,7 +506,6 @@ contains
     ! Copy data to boundary information
     if(.not.lwarmstart) then
       if(lboundary(1).and..not.lperiodic(1)) then
-        sy = myidy*jmax+1; ey = sy+jmax-1
         do j = 2,j1
           do k = 1,kmax
             u0(2,j,k) = boundary(1)%u(j-1,k,1)
@@ -515,7 +514,6 @@ contains
         end do
       endif
       if(lboundary(2).and..not.lperiodic(2)) then
-        sy = myidy*jmax+1; ey = sy+jmax-1
         do j = 2,j1
           do k = 1,kmax
             u0(i2,j,k) = boundary(2)%u(j-1,k,1)
@@ -524,7 +522,6 @@ contains
         end do
       endif
       if(lboundary(3).and..not.lperiodic(3)) then
-        sx = myidx*imax+1; ex = sx+imax-1
         do i = 2,i1
           do k = 1,kmax
             v0(i,2,k) = boundary(3)%v(i-1,k,1)
@@ -533,7 +530,6 @@ contains
         end do
       endif
       if(lboundary(4).and..not.lperiodic(4)) then
-        sx = myidx*imax+1; ex = sx+imax-1
         do i = 2,i1
           do k = 1,kmax
             v0(i,j2,k) = boundary(4)%v(i-1,k,1)
@@ -542,8 +538,6 @@ contains
         end do
       endif
       if(lboundary(5).and..not.lperiodic(5)) then
-        sx = myidx*imax+1; ex = sx+imax-1
-        sy = myidy*jmax+1; ey = sy+jmax-1
         do i = 2,i1
           do j = 2,j1
             w0(i,j,k1) = boundary(5)%w(i-1,j-1,1)

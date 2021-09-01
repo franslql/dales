@@ -561,6 +561,12 @@ contains
       ! Initialize fields
       if(lopenbc .and. linithetero) then! Openboundaries with heterogeneous initialisation
         call openboundary_initfields()
+        do j = 1,j2
+          do i = 1,i2
+            wm(i,j,1) = 0.
+            w0(i,j,1) = 0.
+          end do
+        end do
         do k = 1,kmax
         do j = 1,j2
         do i = 1,i2

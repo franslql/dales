@@ -65,7 +65,7 @@ contains
     dtav=dtav_glob
     klow=1
     khigh=kmax
-    tmin = 0. 
+    tmin = 0.
     tmax = 1e8
     if(myid==0)then
       open(ifnamopt,file=fname_options,status='old',iostat=ierr)
@@ -147,14 +147,14 @@ contains
     if (.not. lfielddump) return
     if (rk3step/=3) return
 
-    if(timee<tnext) then
+    if(timee<tnext .and. idtav/=0) then
       dt_lim = min(dt_lim,tnext-timee)
       return
     end if
 
     tnext = tnext+idtav
-    dt_lim = minval((/dt_lim,tnext-timee/))
-
+    if(idtav/=0) dt_lim = minval((/dt_lim,tnext-timee/))
+    
     allocate(field(2-ih:i1+ih,2-jh:j1+jh,k1))
     allocate(vars(ceiling(1.0*imax/ncoarse),ceiling(1.0*jmax/ncoarse),khigh-klow+1,nvar))
 
@@ -268,8 +268,8 @@ contains
     enddo
     enddo
     enddo
-    
-    if (lnetcdf) then 
+
+    if (lnetcdf) then
       vars(:,:,:,7) = thv0h(2:i1:ncoarse,2:j1:ncoarse,klow:khigh)
       do k=klow,khigh
         vars(:,:,k,7) = vars(:,:,k,7) - thvh(k)

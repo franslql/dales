@@ -60,7 +60,7 @@ contains
                                   lmoist,lcoriol,lpressgrad,igrw_damp,geodamptime,lmomsubs,cu, cv,ifnamopt,fname_options,llsadv,&
                                   ibas_prf,lambda_crit,iadv_mom,iadv_tke,iadv_thl,iadv_qt,iadv_sv,courant,peclet,ladaptive,author,lnoclouds,lrigidlid,unudge,ntimedep, &
                                   solver_id, maxiter, tolerance, n_pre, n_post, precond, checknamelisterror, &
-                                  lopenbc,linithetero,lperiodic,dxint,dyint,dzint,taum,tauh,pbc,lsynturb,nmodes,tau,lambda,lambdas,lambdas_x,lambdas_y,lambdas_z
+                                  lopenbc,linithetero,lperiodic,dxint,dyint,dzint,taum,tauh,pbc,lsynturb,nmodes,tau,lambda,lambdas,lambdas_x,lambdas_y,lambdas_z,iturb
     use modforces,         only : lforce_user
     use modsurfdata,       only : z0,ustin,wtsurf,wqsurf,wsvsurf,ps,thls,isurf
     use modsurface,        only : initsurface
@@ -108,7 +108,7 @@ contains
     namelist/SOLVER/ &
         solver_id, maxiter, tolerance, n_pre, n_post, precond
     namelist/OPENBC/ &
-        lopenbc,linithetero,lper,dxint,dyint,dzint,taum,tauh,pbc,lsynturb,tau,lambda,nmodes,lambdas,lambdas_x,lambdas_y,lambdas_z
+        lopenbc,linithetero,lper,dxint,dyint,dzint,taum,tauh,pbc,lsynturb,iturb,tau,lambda,nmodes,lambdas,lambdas_x,lambdas_y,lambdas_z
 
 
     ! get myid
@@ -284,6 +284,7 @@ contains
     call MPI_BCAST(tauh,1,MY_REAL   ,0,commwrld,mpierr)
     call MPI_BCAST(pbc,1,MPI_INTEGER   ,0,commwrld,mpierr)
     call MPI_BCAST(lsynturb,1,MPI_LOGICAL,0,commwrld,mpierr)
+    call MPI_BCAST(iturb,1,MPI_INTEGER,0,commwrld,mpierr)
     call MPI_BCAST(lambda,1,MY_REAL   ,0,commwrld,mpierr)
     call MPI_BCAST(tau,1,MY_REAL   ,0,commwrld,mpierr)
     call MPI_BCAST(nmodes,1,MPI_INTEGER   ,0,commwrld,mpierr)

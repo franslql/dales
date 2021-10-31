@@ -247,7 +247,7 @@ contains
   subroutine openboundary_readboundary
     use mpi
     use modglobal, only : dzf,kmax,cexpnr,imax,jmax,itot,jtot,k1,ntboundary, &
-      tboundary,dzh,dx,dy,i1,j1,i2,j2,kmax,xsize,ysize,zh,nsv,lwarmstart
+      tboundary,dzh,dx,dy,i1,j1,i2,j2,kmax,xsize,ysize,zh,nsv,lwarmstart,iturb
     use modfields, only : rhobf,rhobh,uprof,vprof,thlprof,qtprof,e12prof,u0,um,v0,vm,w0,wm
     use modmpi, only : myid,comm3d,myidy,myidx,MY_REAL,nprocs
     implicit none
@@ -287,7 +287,7 @@ contains
       if(nsv>0) then
         allocate(boundary(ib)%sv(boundary(ib)%nx1,boundary(ib)%nx2,ntboundary,nsv))
       endif
-      if(lsynturb) then ! Allocate turbulent input fields
+      if(lsynturb .and. iturb<10) then ! Allocate turbulent input fields
         allocate(boundary(ib)%u2(boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary), &
         & boundary(ib)%v2(boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary), &
         & boundary(ib)%w2(boundary(ib)%nx1patch,boundary(ib)%nx2patch,ntboundary), &
@@ -357,7 +357,7 @@ contains
         endif
       endif
       ! Read input for turbulent pertubations
-      if(lsynturb) then
+      if(lsynturb .and. iturb <10) then
         ! Read u2
         STATUS = NF90_INQ_VARID(NCID, 'u2'//boundary(ib)%name, VARID)
         if (STATUS .ne. nf90_noerr) call handle_err(STATUS)

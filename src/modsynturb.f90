@@ -24,7 +24,7 @@
 !
 module modsynturb
 use netcdf
-use modglobal,only: lsynturb,lboundary,lperiodic,boundary,nmodes,lambda,tau,dxint,dyint,itot,jtot,dx,dy,kmax
+use modglobal,only: lsynturb,iturb,lboundary,lperiodic,boundary,nmodes,lambda,tau,dxint,dyint,itot,jtot,dx,dy,kmax
 use RandomNumbers, only : getRandomReal,randomNumberSequence,new_RandomNumberSequence
 implicit none
 real, allocatable, dimension(:,:) :: kn,p,q,vturb,wturb,k_thl,k_qt
@@ -33,6 +33,12 @@ real, allocatable, dimension(:) :: xf,xh,yf,yh
 real :: nisqrt,ctot,nisqrt2
 real, dimension(3) :: lambdasxyz
 integer :: nxpatch,nypatch,nzpatch
+integer, parameter :: isepsim_mom = 10, isynturb_mom = 0, isynturb_all = 1
+integer :: ntturb,itimestep=1
+real, allocatable, dimension(:) :: tturb
+real, allocatable, dimension(:,:,:) :: uturbin,vturbin,wturbin
+character(len = nf90_max_name) :: RecordDimName
+integer :: VARID,STATUS,NCID,mpierr,timeID
 ! ! Uncommend for netcdf output turbulent pertubations west boundary
 ! character (80) :: fname = 'turbOut.xxx.xxx.nc'
 ! integer :: ncid
@@ -50,63 +56,101 @@ type(randomNumberSequence) :: randomNumbers
 contains
   subroutine initsynturb
     use netcdf
-    use modglobal, only : dx,dy,imax,jmax,i1,j1,zf,lambdas,lambdas_x,lambdas_y,lambdas_z
+    use modglobal, only : dx,dy,imax,jmax,i1,j1,zf,lambdas,lambdas_x,lambdas_y,lambdas_z,kmax,k1,cexpnr
     use modmpi, only : myidx, myidy
     implicit none
     integer :: i,j,ib
     if(.not.lsynturb) return
     if(any(lboundary.and..not.(lperiodic))) then
-      ! Constants
-      nisqrt  = sqrt(2./nmodes)
-      nisqrt2 = sqrt(1./nmodes)
-      ctot = lambda/tau
-      randomNumbers = new_RandomNumberSequence(seed = 100)
-      nxpatch = int(dx/dxint*real(itot));
-      nypatch = int(dy/dyint*real(jtot));
-      nzpatch = kmax
-      lambdas = merge(lambda,lambdas,lambdas==-1.)
-      lambdasxyz = (/merge(lambdas,lambdas_x,lambdas_x==-1.), &
-                  & merge(lambdas,lambdas_y,lambdas_y==-1.), &
-                  & merge(lambdas,lambdas_z,lambdas_z==-1.)/)
-      ! Allocate variables
-      allocate(kn(nmodes,3),q(nmodes,3),p(nmodes,3),omega(nmodes),&
-        xf(imax),xh(i1),yf(jmax),yh(j1),vturb(jmax,kmax),wturb(jmax,kmax), &
-        k_thl(nmodes,3),k_qt(nmodes,3),omega_thl(nmodes),omega_qt(nmodes), &
-        p_thl(nmodes),p_qt(nmodes),q_thl(nmodes),q_qt(nmodes))
-      ! Calculate coordinates
-      xf = (/((i-0.5)*dx,i=1,imax,1)/)+imax*myidx*dx
-      xh = (/(i*dx,i=1,i1,1)/)+imax*myidx*dx
-      yf = (/((i-0.5)*dy,i=1,jmax,1)/)+jmax*myidy*dy
-      yh = (/(i*dy,i=1,j1,1)/)+jmax*myidy*dy
-      ! Fill random distributed variables
-      do i = 1,3
-        do j = 1,nmodes
-          kn(j,i) = gaussrand(0.,0.5)
-          k_thl(j,i) = gaussrand(0.,0.5)
-          k_qt(j,i) = gaussrand(0.,0.5)
-          if(i==1) then
-            omega(j) = gaussrand(0.,1.)
-            omega_thl(j) = gaussrand(0.,1.)
-            omega_qt(j) = gaussrand(0.,1.)
-            p_thl(j) = gaussrand(0.,1.)
-            q_thl(j) = gaussrand(0.,1.)
-            p_qt(j)  = gaussrand(0.,1.)
-            q_qt(j)  = gaussrand(0.,1.)
-          endif
+      if(iturb == isynturb_all .or. iturb == isynturb_mom) then
+        ! Constants
+        nisqrt  = sqrt(2./nmodes)
+        nisqrt2 = sqrt(1./nmodes)
+        ctot = lambda/tau
+        randomNumbers = new_RandomNumberSequence(seed = 100)
+        nxpatch = int(dx/dxint*real(itot));
+        nypatch = int(dy/dyint*real(jtot));
+        nzpatch = kmax
+        lambdas = merge(lambda,lambdas,lambdas==-1.)
+        lambdasxyz = (/merge(lambdas,lambdas_x,lambdas_x==-1.), &
+                    & merge(lambdas,lambdas_y,lambdas_y==-1.), &
+                    & merge(lambdas,lambdas_z,lambdas_z==-1.)/)
+        ! Allocate variables
+        allocate(kn(nmodes,3),q(nmodes,3),p(nmodes,3),omega(nmodes),&
+          xf(imax),xh(i1),yf(jmax),yh(j1),k_thl(nmodes,3),k_qt(nmodes,3), &
+          omega_thl(nmodes),omega_qt(nmodes), &
+          p_thl(nmodes),p_qt(nmodes),q_thl(nmodes),q_qt(nmodes))
+        ! allocate(vturb(jmax,kmax),wturb(jmax,kmax))
+        ! Calculate coordinates
+        xf = (/((i-0.5)*dx,i=1,imax,1)/)+imax*myidx*dx
+        xh = (/(i*dx,i=1,i1,1)/)+imax*myidx*dx
+        yf = (/((i-0.5)*dy,i=1,jmax,1)/)+jmax*myidy*dy
+        yh = (/(i*dy,i=1,j1,1)/)+jmax*myidy*dy
+        ! Fill random distributed variables
+        do i = 1,3
+          do j = 1,nmodes
+            kn(j,i) = gaussrand(0.,0.5)
+            k_thl(j,i) = gaussrand(0.,0.5)
+            k_qt(j,i) = gaussrand(0.,0.5)
+            if(i==1) then
+              omega(j) = gaussrand(0.,1.)
+              omega_thl(j) = gaussrand(0.,1.)
+              omega_qt(j) = gaussrand(0.,1.)
+              p_thl(j) = gaussrand(0.,1.)
+              q_thl(j) = gaussrand(0.,1.)
+              p_qt(j)  = gaussrand(0.,1.)
+              q_qt(j)  = gaussrand(0.,1.)
+            endif
+          end do
         end do
-      end do
-      ! Obtain p and q with cross product
-      do i = 1,nmodes
-        p(i,:) = cross((/gaussrand(0.,1.),gaussrand(0.,1.),gaussrand(0.,1.)/),kn(i,:))
-        q(i,:) = cross((/gaussrand(0.,1.),gaussrand(0.,1.),gaussrand(0.,1.)/),kn(i,:))
-      end do
-      do ib = 1,5
-        if(.not.lboundary(ib)) cycle
-        allocate(boundary(ib)%eigvec(boundary(ib)%nx1patch,boundary(ib)%nx2patch,3,3), &
-               & boundary(ib)%ci(boundary(ib)%nx1patch,boundary(ib)%nx2patch,3))!, &
-               ! & boundary(ib)%randthl(boundary(ib)%nx1,boundary(ib)%nx2), &
-               ! & boundary(ib)%randqt(boundary(ib)%nx1,boundary(ib)%nx2))
-      end do
+        ! Obtain p and q with cross product
+        do i = 1,nmodes
+          p(i,:) = cross((/gaussrand(0.,1.),gaussrand(0.,1.),gaussrand(0.,1.)/),kn(i,:))
+          q(i,:) = cross((/gaussrand(0.,1.),gaussrand(0.,1.),gaussrand(0.,1.)/),kn(i,:))
+        end do
+        do ib = 1,5
+          if(.not.lboundary(ib)) cycle
+          allocate(boundary(ib)%eigvec(boundary(ib)%nx1patch,boundary(ib)%nx2patch,3,3), &
+                 & boundary(ib)%ci(boundary(ib)%nx1patch,boundary(ib)%nx2patch,3))!, &
+                 ! & boundary(ib)%randthl(boundary(ib)%nx1,boundary(ib)%nx2), &
+                 ! & boundary(ib)%randqt(boundary(ib)%nx1,boundary(ib)%nx2))
+        end do
+      elseif(iturb == isepsim_mom .and. lboundary(1)) then
+        !--- open nc file ---
+        STATUS = NF90_OPEN('turb.inp.'//cexpnr//'.nc', nf90_nowrite, NCID)
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        !--- get time dimensions
+        status = nf90_inq_dimid(ncid, "time", timeID)
+        if (status /= nf90_noerr) call handle_err(status)
+        status = nf90_inquire_dimension(NCID, timeID, len=ntturb, name=RecordDimName)
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        !--- read time
+        allocate(tturb(ntturb))
+        STATUS = NF90_INQ_VARID(NCID, 'time', VARID)
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        STATUS = NF90_GET_VAR (NCID, VARID, tturb, start=(/1/), count=(/ntturb/) )
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        ! --- allocate fields
+        allocate(uturbin(jmax,kmax,ntturb))
+        allocate(vturbin(j1,kmax,ntturb))
+        allocate(wturbin(jmax,k1,ntturb))
+        ! --- read fields
+        ! Read u
+        STATUS = NF90_INQ_VARID(NCID,'uturbwest', VARID)
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        STATUS = NF90_GET_VAR (NCID, VARID, uturbin, start=(/myidy*jmax+1,1,1/), &
+          & count=(/jmax,kmax,ntturb/))
+        ! Read v
+        STATUS = NF90_INQ_VARID(NCID,'vturbwest', VARID)
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        STATUS = NF90_GET_VAR (NCID, VARID, vturbin, start=(/myidy*jmax+1,1,1/), &
+          & count=(/j1,kmax,ntturb/))
+        ! Read w
+        STATUS = NF90_INQ_VARID(NCID,'wturbwest', VARID)
+        if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+        STATUS = NF90_GET_VAR (NCID, VARID, wturbin, start=(/myidy*jmax+1,1,1/), &
+          & count=(/jmax,k1,ntturb/))
+      endif
       ! ! Uncommend for netcdf output turbulent pertubations west boundary
       ! if(lboundary(1)) then
       !   write(fname,'(A,i3.3,A,i3.3,A)') 'turbOut.', myidx, '.', myidy, '.nc'
@@ -132,6 +176,17 @@ contains
     endif
   end subroutine initsynturb
 
+  subroutine handle_err(errcode)
+
+  implicit none
+
+  integer errcode
+
+  write(6,*) 'Error: ', nf90_strerror(errcode)
+  stop 2
+
+  end subroutine handle_err
+
   subroutine exitsynturb
     implicit none
     integer :: ib
@@ -139,15 +194,19 @@ contains
     ! ! Uncommend for netcdf output turbulent pertubations
     ! if(lboundary(1)) call check( nf90_close(ncid) )
     if(any(lboundary.and..not.(lperiodic))) then
-      do ib = 1,5
-        if(.not.lboundary(ib)) cycle
-        deallocate(boundary(ib)%u2,boundary(ib)%v2,boundary(ib)%w2,&
-         & boundary(ib)%uv,boundary(ib)%uw,boundary(ib)%vw,&
-         & boundary(ib)%thl2,boundary(ib)%qt2,boundary(ib)%wthl, &
-         & boundary(ib)%wqt,boundary(ib)%eigvec,boundary(ib)%ci)
-      end do
-      deallocate(vturb,wturb)
-      deallocate(kn,q,p,omega,xf,xh,yf,yh,k_thl,k_qt,omega_thl,omega_qt,p_thl,p_qt,q_thl,q_qt)
+      if(iturb == isynturb_mom .or. iturb == isynturb_all) then
+        do ib = 1,5
+          if(.not.lboundary(ib)) cycle
+          deallocate(boundary(ib)%u2,boundary(ib)%v2,boundary(ib)%w2,&
+           & boundary(ib)%uv,boundary(ib)%uw,boundary(ib)%vw,&
+           & boundary(ib)%thl2,boundary(ib)%qt2,boundary(ib)%wthl, &
+           & boundary(ib)%wqt,boundary(ib)%eigvec,boundary(ib)%ci)
+        end do
+        !deallocate(vturb,wturb)
+        deallocate(kn,q,p,omega,xf,xh,yf,yh,k_thl,k_qt,omega_thl,omega_qt,p_thl,p_qt,q_thl,q_qt)
+      elseif(iturb == isepsim_mom .and. lboundary(1)) then
+        deallocate(uturbin,vturbin,wturbin)
+      endif
     endif
   end subroutine exitsynturb
 
@@ -162,10 +221,53 @@ contains
   ! end subroutine check
 
   subroutine synturb()
+    if(.not.lsynturb) return
+    select case(iturb)
+    case(isynturb_mom)
+      call synturb_mom()
+    case(isynturb_all)
+      call synturb_all()
+    case(isepsim_mom)
+      call sepsim_mom()
+    end select
+  end subroutine synturb
+
+  subroutine synturb_mom()
     use modglobal, only : dx,dy,itot,jtot,zh,zf,imax,jmax,i1,j1,kmax,k1
     implicit none
     integer :: ib
-    if(.not.lsynturb) return
+    do ib = 1,5
+      if(.not.lboundary(ib).or.lperiodic(ib)) cycle
+      call calc_eigdec(ib)
+      select case(ib)
+      case(1)
+        call calc_pert(ib,(/0./),yf,zf,1,jmax,kmax,boundary(ib)%uturb,1)
+        call calc_pert(ib,(/0./),yh,zf,1,j1,kmax,boundary(ib)%vturb,2)
+        call calc_pert(ib,(/0./),yf,zh,1,jmax,k1,boundary(ib)%wturb,3)
+      case(2)
+        call calc_pert(ib,(/(itot+1)*dx/),yf,zf,1,jmax,kmax,boundary(ib)%uturb,1)
+        call calc_pert(ib,(/(itot+1)*dx/),yh,zf,1,j1,kmax,boundary(ib)%vturb,2)
+        call calc_pert(ib,(/(itot+1)*dx/),yf,zh,1,jmax,k1,boundary(ib)%wturb,3)
+      case(3)
+        call calc_pert(ib,xh,(/0./),zf,i1,1,kmax,boundary(ib)%uturb,1)
+        call calc_pert(ib,xf,(/0./),zf,imax,1,kmax,boundary(ib)%vturb,2)
+        call calc_pert(ib,xh,(/0./),zh,imax,1,k1,boundary(ib)%wturb,1)
+      case(4)
+        call calc_pert(ib,xh,(/(jtot+1)*dy/),zf,i1,1,kmax,boundary(ib)%uturb,1)
+        call calc_pert(ib,xf,(/(jtot+1)*dy/),zf,imax,1,kmax,boundary(ib)%vturb,2)
+        call calc_pert(ib,xh,(/(jtot+1)*dy/),zh,imax,1,k1,boundary(ib)%wturb,1)
+      case(5)
+        call calc_pert(ib,xh,yf,(/zh(k1)/),i1,jmax,1,boundary(ib)%uturb,1)
+        call calc_pert(ib,xf,yh,(/zh(k1)/),imax,j1,1,boundary(ib)%vturb,2)
+        call calc_pert(ib,xf,yf,(/zh(k1)/),imax,jmax,1,boundary(ib)%wturb,3)
+      end select
+    end do
+  end subroutine synturb_mom
+
+  subroutine synturb_all()
+    use modglobal, only : dx,dy,itot,jtot,zh,zf,imax,jmax,i1,j1,kmax,k1
+    implicit none
+    integer :: ib
     do ib = 1,5
       if(.not.lboundary(ib).or.lperiodic(ib)) cycle
       call calc_eigdec(ib)
@@ -197,7 +299,38 @@ contains
           boundary(ib)%thlturb,boundary(ib)%qtturb)
       end select
     end do
-  end subroutine synturb
+  end subroutine synturb_all
+
+  subroutine sepsim_mom()
+    use modglobal, only : rtimee,rdt
+    use modmpi, only : myid
+    implicit none
+    integer :: ib
+    do ib = 1,5
+      if(.not.lboundary(ib).or.lperiodic(ib)) cycle
+      select case(ib)
+      case(1)
+        do while(tturb(itimestep)<real(rtimee))
+          itimestep = itimestep+1
+        end do
+        if(abs(tturb(itimestep)-real(rtimee))>0.01 .and. real(rtimee)>5.) then
+          print *, 'mistake in time', itimestep,tturb(itimestep),real(rtimee),rdt
+          stop
+        endif
+        boundary(ib)%uturb = uturbin(:,:,itimestep)
+        boundary(ib)%vturb = vturbin(:,:,itimestep)
+        boundary(ib)%wturb = wturbin(:,:,itimestep)
+      case(2)
+        ! Do nothing (needs to be added)
+      case(3)
+        ! Do nothing (needs to be added)
+      case(4)
+        ! Do nothing (needs to be added)
+      case(5)
+        ! Do nothing (needs to be added)
+      end select
+    end do
+  end subroutine
 
   subroutine calc_eigdec(ib)
     use modglobal, only : rtimee,rdt,tboundary,ntboundary
@@ -380,10 +513,10 @@ contains
         rho = min(max(wqt/sqrt(qt2*w2),-1.),1.)
         qtturb(pi1,pi2)  = (rho*wturbf/sqrt(w2) + sqrt(1-rho**2)*qttemp)*sqrt(qt2)
       endif
-      if(ib==1) then
-        vturb(pi1,pi2) = nisqrt*dot(eigvec(2,:),(/utemp,vtemp,wtemp/))
-        wturb(pi1,pi2) = nisqrt*dot(eigvec(3,:),(/utemp,vtemp,wtemp/))
-      endif
+      !if(ib==1) then
+      !  vturb(pi1,pi2) = nisqrt*dot(eigvec(2,:),(/utemp,vtemp,wtemp/))
+      !  wturb(pi1,pi2) = nisqrt*dot(eigvec(3,:),(/utemp,vtemp,wtemp/))
+      !endif
     end do
     end do
     end do

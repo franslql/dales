@@ -42,6 +42,7 @@ implicit none
 integer :: nxpatch, nypatch, nzpatch
 real, dimension(:,:), allocatable :: uturbtemp,vturbtemp,wturbtemp
 real, dimension(:), allocatable :: rhointi
+real, dimension(:,:,:), allocatable :: thls_hetero
 integer :: nx1max,nx2max
 
 contains
@@ -49,7 +50,8 @@ contains
     ! Initialisation routine for openboundaries
     use modmpi, only : myidx, myidy, nprocx, nprocy,myid
     use modglobal, only : imax,jmax,kmax,i1,j1,k1,dx,dy,dzf,itot,jtot,zf,zh,solver_id, &
-      & iadv_mom,iadv_thl,iadv_qt,iadv_tke,iadv_sv,nsv,cu,cv
+      & iadv_mom,iadv_thl,iadv_qt,iadv_tke,iadv_sv,nsv,cu,cv,lsfc_thl
+    use modsurfdata, only : isurf
     use modfields, only : rhobf
     implicit none
     integer :: i,j
@@ -65,6 +67,8 @@ contains
     if(any(iadv_sv(1:nsv)/=2)) stop 'Only second order advection scheme supported with openboundaries, change iadv_sv to 2'
     if(cu/=0.) stop 'Translation velocity not allowed in combination with open boundaries, set cu to 0'
     if(cv/=0.) stop 'Translation velocity not allowed in combination with open boundaries, set cv to 0'
+    print *, isurf
+    if(lsfc_thl .and. .not. isurf==2) stop 'Heterogeneous surface temperature only possible with isurf = 2'
     ! Check if boundary is present on process
     if(myidx==0)        lboundary(1) = .true.
     if(myidx==nprocx-1) lboundary(2) = .true.
@@ -136,7 +140,7 @@ contains
 
   subroutine exitopenboundary
     ! Exit routine for openboundaries
-    use modglobal, only : nsv
+    use modglobal, only : nsv,lsfc_thl
     implicit none
     integer :: i
     if(.not.lopenbc) return
@@ -149,19 +153,34 @@ contains
           boundary(i)%wturb,boundary(i)%thlturb,boundary(i)%qtturb,boundary(i)%name,boundary(i)%e12turb)
       if(nsv>0) deallocate(boundary(i)%sv,boundary(i)%svturb)
     end do
+    if(lsfc_thl) deallocate(thls_hetero)
     deallocate(rhointi)
     call exitsynturb
   end subroutine exitopenboundary
 
   subroutine openboundary_initfields
-    use modglobal, only : imax,jmax,kmax,i1,j1,cexpnr,nsv
+    use modglobal, only : imax,jmax,kmax,i1,j1,cexpnr,nsv,lsfc_thl
     use modfields, only : u0,um,v0,vm,w0,wm,thl0,thlm,qt0,qtm,e120,e12m, sv0, svm, &
       uprof,vprof,thlprof,qtprof,e12prof,svprof
     use modmpi, only : myidx,myidy,myid
+    use modsurfdata, only : tskin
     implicit none
     integer :: VARID,STATUS,NCID,mpierr,timeID,n
     integer, dimension(3) :: istart
     if(.not.lopenbc) return
+    ! Init tskin if heterogeneous surface temperature is used
+    if(lsfc_thl) then
+      !--- open nc file ---
+      STATUS = NF90_OPEN('openboundaries.inp.'//cexpnr//'.nc', nf90_nowrite, NCID)
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      STATUS = NF90_INQ_VARID(NCID, 'thls', VARID)
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      STATUS = NF90_GET_VAR (NCID, VARID, tskin(2:i1,2:j1), start=(/myidx*imax+1,myidy*jmax+1,1/), &
+        & count=(/imax,jmax,1/))
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      status = nf90_close(ncid)
+      if (status /= nf90_noerr) call handle_err(status)
+    endif
     if(.not.linithetero) return
     u0 = 0.; um = 0.; v0 = 0.; vm = 0.; w0 = 0.; wm = 0.;
     thl0 = 0.; thlm = 0.; qt0 = 0; qtm = 0; e120 = 0.; e12m = 0.
@@ -247,7 +266,7 @@ contains
   subroutine openboundary_readboundary
     use mpi
     use modglobal, only : dzf,kmax,cexpnr,imax,jmax,itot,jtot,k1,ntboundary, &
-      tboundary,dzh,dx,dy,i1,j1,i2,j2,kmax,xsize,ysize,zh,nsv,lwarmstart,iturb
+      tboundary,dzh,dx,dy,i1,j1,i2,j2,kmax,xsize,ysize,zh,nsv,lwarmstart,iturb,lsfc_thl
     use modfields, only : rhobf,rhobh,uprof,vprof,thlprof,qtprof,e12prof,u0,um,v0,vm,w0,wm
     use modmpi, only : myid,comm3d,myidy,myidx,MY_REAL,nprocs
     implicit none
@@ -420,6 +439,15 @@ contains
         if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
       endif
     end do
+    ! Read heterogeneous surface temperature
+    if(lsfc_thl) then
+      allocate(thls_hetero(imax,jmax,ntboundary))
+      STATUS = NF90_INQ_VARID(NCID, 'thls', VARID)
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      STATUS = NF90_GET_VAR (NCID, VARID, thls_hetero, start=(/myidx*imax+1,myidy*jmax+1,1/), &
+        & count=(/imax,jmax,ntboundary/))
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+    endif
     status = nf90_close(ncid)
     if (status /= nf90_noerr) call handle_err(status)
     ! Divergence correction
@@ -727,6 +755,39 @@ contains
     implicit none
     if(rk3step == 1) call synturb()
   end subroutine openboundary_turb
+
+  subroutine openboundary_sfc
+    use modglobal, only : lsfc_thl,tboundary,rtimee,ntboundary,rdt,i1,j1
+    use modsurfdata, only : tskin
+    implicit none
+    integer :: itm,itp,i,j
+    real    :: tm,tp,fm,fp
+    if(.not.lsfc_thl .or. .not.lopenbc) return
+    ! Get interpolation coefficients for boundary input
+    itm=1
+    if(ntboundary>1) then
+      do while(rtimee-rdt>tboundary(itm))
+        itm=itm+1
+      end do
+      if (rtimee-rdt>tboundary(1)) then
+        itm=itm-1
+      end if
+      itp = itm+1
+      tm = tboundary(itm)
+      tp = tboundary(itp)
+      fm = (tp-rtimee+rdt)/(tp-tm)
+      fp = (rtimee-rdt-tm)/(tp-tm)
+    else
+      itp = 1
+      fp  = 0.
+      fm  = 1.
+    endif
+    do i = 2,i1
+      do j = 2,j1
+        tskin(i,j) = fp*thls_hetero(i-1,j-1,itp)+fm*thls_hetero(i-1,j-1,itm)
+      end do
+    end do
+  end subroutine openboundary_sfc
 
   subroutine openboundary_excjs(a,sx,ex,sy,ey,sz,ez,ih,jh,switch)
     ! Subroutine that handles periodic boundaries. Based on the excjs function

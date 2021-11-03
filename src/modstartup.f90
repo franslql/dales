@@ -55,7 +55,7 @@ contains
       !-----------------------------------------------------------------|
 
     use modglobal,         only : version,initglobal,iexpnr, ltotruntime, runtime, dtmax, dtav_glob,timeav_glob,&
-                                  lwarmstart,startfile,trestart,&
+                                  lwarmstart,startfile,trestart,lsfc_thl,&
                                   nsv,itot,jtot,kmax,xsize,ysize,xlat,xlon,xyear,xday,xtime,&
                                   lmoist,lcoriol,lpressgrad,igrw_damp,geodamptime,lmomsubs,cu, cv,ifnamopt,fname_options,llsadv,&
                                   ibas_prf,lambda_crit,iadv_mom,iadv_tke,iadv_thl,iadv_qt,iadv_sv,courant,peclet,ladaptive,author,lnoclouds,lrigidlid,unudge,ntimedep, &
@@ -108,7 +108,7 @@ contains
     namelist/SOLVER/ &
         solver_id, maxiter, tolerance, n_pre, n_post, precond
     namelist/OPENBC/ &
-        lopenbc,linithetero,lper,dxint,dyint,dzint,taum,tauh,pbc,lsynturb,iturb,tau,lambda,nmodes,lambdas,lambdas_x,lambdas_y,lambdas_z
+        lopenbc,linithetero,lsfc_thl,lper,dxint,dyint,dzint,taum,tauh,pbc,lsynturb,iturb,tau,lambda,nmodes,lambdas,lambdas_x,lambdas_y,lambdas_z
 
 
     ! get myid
@@ -276,6 +276,7 @@ contains
     ! Broadcast openboundaries Variables
     call MPI_BCAST(lopenbc,1,MPI_LOGICAL,0,commwrld,mpierr)
     call MPI_BCAST(linithetero,1,MPI_LOGICAL,0,commwrld,mpierr)
+    call MPI_BCAST(lsfc_thl,1,MPI_LOGICAL,0,commwrld,mpierr)
     call MPI_BCAST(lperiodic,5,MPI_LOGICAL,0,commwrld,mpierr)
     call MPI_BCAST(dxint,1,MY_REAL   ,0,commwrld,mpierr)
     call MPI_BCAST(dyint,1,MY_REAL   ,0,commwrld,mpierr)
@@ -422,7 +423,7 @@ contains
                                   rtimee,timee,ntrun,btime,dt_lim,nsv,&
                                   zf,dzf,dzh,rv,rd,cp,rlv,pref0,om23_gs,&
                                   ijtot,cu,cv,e12min,dzh,cexpnr,ifinput,lwarmstart,ltotruntime,itrestart,&
-                                  trestart, ladaptive,llsadv,tnextrestart,longint,lopenbc,linithetero
+                                  trestart, ladaptive,llsadv,tnextrestart,longint,lopenbc,linithetero,lsfc_thl
     use modsubgrid,        only : ekm,ekh
     use modsurfdata,       only : wsvsurf, &
                                   thls,tskin,tskinm,tsoil,tsoilm,phiw,phiwm,Wl,Wlm,thvs,qts,isurf,svs,obl,oblav,&
@@ -647,7 +648,9 @@ contains
         phiwm  = phiw
         Wlm    = Wl
       case(2,5)
-        tskin  = thls
+        if(.not.(lopenbc.and.lsfc_thl.and.isurf==2)) then
+          tskin  = thls
+        endif
       case(3,4)
         thls = thlprof(1)
         qts  = qtprof(1)

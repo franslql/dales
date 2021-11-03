@@ -710,12 +710,12 @@ contains
 
 !> Calculates the interaction with the soil, the surface temperature and humidity, and finally the surface fluxes.
   subroutine surface
-    use modglobal,  only : i1,j1,fkar,zf,cu,cv,nsv,ijtot,rd,rv,lopenbc,lboundary,lperiodic
+    use modglobal,  only : i1,j1,fkar,zf,cu,cv,nsv,ijtot,rd,rv,lopenbc,lboundary,lperiodic,lsfc_thl
     use modfields,  only : thl0, qt0, u0, v0, u0av, v0av
     use mpi
     use modmpi,     only : my_real, mpierr, comm3d, mpi_sum, excjs, mpi_integer
     use moduser,    only : surf_user
-    use modopenboundary, only : openboundary_excjs
+    use modopenboundary, only : openboundary_excjs,openboundary_sfc
     implicit none
 
     integer  :: i, j, n, patchx, patchy
@@ -886,15 +886,19 @@ contains
       call do_lsm
 
     elseif(isurf == 2) then
-      do j = 2, j1
-        do i = 2, i1
-          if(lhetero) then
-            tskin(i,j) = thls_patch(patchxnr(i),patchynr(j))
-          else
-            tskin(i,j) = thls
-          endif
+      if(lopenbc .and. lsfc_thl) then
+        call openboundary_sfc
+      else
+        do j = 2, j1
+          do i = 2, i1
+            if(lhetero) then
+              tskin(i,j) = thls_patch(patchxnr(i),patchynr(j))
+            else
+              tskin(i,j) = thls
+            endif
+          end do
         end do
-      end do
+      endif
 
       call qtsurf
 
@@ -991,7 +995,7 @@ contains
 
       end if
 
-    elseif(isurf .ne. 5) then
+    elseif(isurf>2 .and. isurf .ne. 5) then
 
       if(lneutral) then
         obl(:,:) = -1.e10

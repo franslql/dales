@@ -42,7 +42,7 @@ implicit none
 integer :: nxpatch, nypatch, nzpatch
 real, dimension(:,:), allocatable :: uturbtemp,vturbtemp,wturbtemp
 real, dimension(:), allocatable :: rhointi
-real, dimension(:,:,:), allocatable :: thls_hetero
+real, dimension(:,:,:), allocatable :: thls_hetero,ps_hetero
 integer :: nx1max,nx2max
 
 contains
@@ -120,8 +120,8 @@ contains
       if(.not.lboundary(i) .or. lperiodic(i)) cycle ! Open boundary not present
       allocate(boundary(i)%radcorr(boundary(i)%nx1patch,boundary(i)%nx2patch), &
         boundary(i)%radcorrsingle(boundary(i)%nx1patch,boundary(i)%nx2patch), &
-        boundary(i)%uphase(boundary(i)%nx1,boundary(i)%nx2), &
-        boundary(i)%uphasesingle(boundary(i)%nx1,boundary(i)%nx2), &
+        boundary(i)%uphase(boundary(i)%nx1patch,boundary(i)%nx2patch), &
+        boundary(i)%uphasesingle(boundary(i)%nx1patch,boundary(i)%nx2patch), &
         boundary(i)%uturb(boundary(i)%nx1u,boundary(i)%nx2u), &
         boundary(i)%vturb(boundary(i)%nx1v,boundary(i)%nx2v), &
         boundary(i)%wturb(boundary(i)%nx1w,boundary(i)%nx2w), &
@@ -153,7 +153,7 @@ contains
           boundary(i)%wturb,boundary(i)%thlturb,boundary(i)%qtturb,boundary(i)%name,boundary(i)%e12turb)
       if(nsv>0) deallocate(boundary(i)%sv,boundary(i)%svturb)
     end do
-    if(lsfc_thl) deallocate(thls_hetero)
+    if(lsfc_thl) deallocate(thls_hetero,ps_hetero)
     deallocate(rhointi)
     call exitsynturb
   end subroutine exitopenboundary
@@ -266,17 +266,17 @@ contains
   subroutine openboundary_readboundary
     use mpi
     use modglobal, only : dzf,kmax,cexpnr,imax,jmax,itot,jtot,k1,ntboundary, &
-      tboundary,dzh,dx,dy,i1,j1,i2,j2,kmax,xsize,ysize,zh,nsv,lwarmstart,iturb,lsfc_thl
+      tboundary,dzh,dx,dy,i1,j1,i2,j2,kmax,xsize,ysize,zh,nsv,lwarmstart,iturb,lsfc_thl,ijtot
     use modfields, only : rhobf,rhobh,uprof,vprof,thlprof,qtprof,e12prof,u0,um,v0,vm,w0,wm
     use modmpi, only : myid,comm3d,myidy,myidx,MY_REAL,nprocs
+    use modsurfdata, only : tskin,thls,ps
     implicit none
     integer :: it,i,j,k,ib,sy,sx,ey,ex,ip,iter
-    integer,parameter :: maxiter = 20
-    real,parameter :: maxdiv = 1e-10
     character(len = nf90_max_name) :: RecordDimName
     integer :: VARID,STATUS,NCID,mpierr,timeID
     integer, dimension(3) :: istart
     real :: sumdiv,divold,divnew,div,divpart
+    real,dimension(2) :: sumlocal,sumglobal
 
     if(.not.lopenbc) return
     !--- open nc file ---
@@ -439,7 +439,7 @@ contains
         if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
       endif
     end do
-    ! Read heterogeneous surface temperature
+    ! Read heterogeneous surface temperature and pressure
     if(lsfc_thl) then
       allocate(thls_hetero(imax,jmax,ntboundary))
       STATUS = NF90_INQ_VARID(NCID, 'thls', VARID)
@@ -447,9 +447,38 @@ contains
       STATUS = NF90_GET_VAR (NCID, VARID, thls_hetero, start=(/myidx*imax+1,myidy*jmax+1,1/), &
         & count=(/imax,jmax,ntboundary/))
       if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      allocate(ps_hetero(imax,jmax,ntboundary))
+      STATUS = NF90_INQ_VARID(NCID, 'ps', VARID)
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      STATUS = NF90_GET_VAR (NCID, VARID, ps_hetero, start=(/myidx*imax+1,myidy*jmax+1,1/), &
+        & count=(/imax,jmax,ntboundary/))
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      do i = 2,i1
+        do j = 2,j1
+          tskin(i,j)  = thls_hetero(i-1,j-1,1)
+          sumlocal(1) = sumlocal(1) + tskin(i,j)
+          sumlocal(2) = sumlocal(2) + ps_hetero(i-1,j-1,1)
+        end do
+      end do
+      call MPI_ALLREDUCE(sumlocal,sumglobal,2,MY_REAL,MPI_SUM,comm3d,mpierr)
+      thls = sumglobal(1)/ijtot
+      ps   = sumglobal(2)/ijtot
     endif
     status = nf90_close(ncid)
     if (status /= nf90_noerr) call handle_err(status)
+  end subroutine openboundary_readboundary
+
+  subroutine openboundary_divcorr()
+    use mpi
+    use modmpi, only : myid,comm3d,mpierr,MY_REAL
+    use modglobal, only : imax,jmax,kmax,dzf,dy,dx,xsize,ysize,zh,k1,lwarmstart,i1,i2,j1,j2
+    use modfields, only : u0,um,v0,vm,w0,wm,rhobf,rhobh
+    use modchecksim, only : chkdiv
+    implicit none
+    real :: sumdiv,divold,divnew,div,divpart
+    integer :: i,j,k,it,iter
+    integer,parameter :: maxiter = 20
+    real,parameter :: maxdiv = 1e-10
     ! Divergence correction
     if(myid==0) print *, "Start divergence correction"
     do it = 1,ntboundary
@@ -530,6 +559,7 @@ contains
         endif
       end do
     end do
+    call chkdiv
     if(myid==0) print *, "Finished divergence correction"
     ! Copy data to boundary information
     if(.not.lwarmstart) then
@@ -576,7 +606,8 @@ contains
     endif
     allocate(rhointi(k1))
     rhointi = 1./(rhobf*dzf)
-  end subroutine openboundary_readboundary
+    call chkdiv
+  end subroutine openboundary_divcorr
 
   subroutine openboundary_ghost
     ! Subroutine that fills the ghost cells for the cell centred variables at the boundary
@@ -737,7 +768,7 @@ contains
             jpos = j + (myidy * jmax) - 1
             jpatch = int((jpos-0.5)*dy/dyint)+1
             boundary(5)%uphasesingle(ipatch,jpatch) = boundary(5)%uphasesingle(ipatch,jpatch) + &
-              (-wp(i+1,j+1,kmax)*dzf(kmax-1)/sign(max(abs(rhobh(kmax)*w0(i+1,j+1,kmax)-rhobh(kmax-1)*w0(i+1,j+1,kmax-1))/rhobh(kmax),1e-10), &
+              (-rhobh(kmax)*wp(i+1,j+1,kmax)*dzf(kmax-1)/sign(max(abs(rhobh(kmax)*w0(i+1,j+1,kmax)-rhobh(kmax-1)*w0(i+1,j+1,kmax-1)),1e-10), &
               & rhobh(kmax)*w0(i+1,j+1,kmax)-rhobh(kmax-1)*w0(i+1,j+1,kmax-1)))*dx*dy/(dxint*dyint)
           end do
         end do
@@ -757,14 +788,18 @@ contains
   end subroutine openboundary_turb
 
   subroutine openboundary_sfc
-    use modglobal, only : lsfc_thl,tboundary,rtimee,ntboundary,rdt,i1,j1
-    use modsurfdata, only : tskin
+    use mpi
+    use modmpi, only : comm3d,mpierr,MY_REAL
+    use modglobal, only : lsfc_thl,tboundary,rtimee,ntboundary,rdt,i1,j1,ijtot
+    use modsurfdata, only : tskin,thls,ps
     implicit none
     integer :: itm,itp,i,j
     real    :: tm,tp,fm,fp
+    real,dimension(2) :: sumlocal,sumglobal
     if(.not.lsfc_thl .or. .not.lopenbc) return
     ! Get interpolation coefficients for boundary input
     itm=1
+    sumlocal = 0.
     if(ntboundary>1) then
       do while(rtimee-rdt>tboundary(itm))
         itm=itm+1
@@ -785,8 +820,13 @@ contains
     do i = 2,i1
       do j = 2,j1
         tskin(i,j) = fp*thls_hetero(i-1,j-1,itp)+fm*thls_hetero(i-1,j-1,itm)
+        sumlocal(1) = sumlocal(1) + tskin(i,j)
+        sumlocal(2) = sumlocal(2) + fp*ps_hetero(i-1,j-1,itp)+fm*ps_hetero(i-1,j-1,itm)
       end do
     end do
+    call MPI_ALLREDUCE(sumlocal,sumglobal,2,MY_REAL,MPI_SUM,comm3d,mpierr)
+    thls = sumglobal(1)/ijtot
+    ps   = sumglobal(2)/ijtot
   end subroutine openboundary_sfc
 
   subroutine openboundary_excjs(a,sx,ex,sy,ey,sz,ez,ih,jh,switch)
@@ -998,17 +1038,17 @@ contains
           if(un<=0) then ! Homogeneous Neumann outflow
             a(sx-1,j+1,k)=a(sx,j+1,k)
           else ! Robin inflow conditions
-            un2 = un**2
-            if(lboundary(3).and.j==1.and.v0(sx,2,min(k,kmax))>0) then
-              un2 = un2+v0(sx,2,min(k,kmax))**2
-            endif
-            if(lboundary(4).and.j==nx1.and.v0(sx,j2,min(k,kmax))<0) then
-              un2 = un2+v0(sx,j2,min(k,kmax))**2
-            endif
-            if(lboundary(5).and.k==nx2.and.w0(sx,min(j+1,j1),k1)<0) then
-              un2 = un2+w0(sx,min(j+1,j1),k1)**2
-            endif
-            un = un/sqrt(un2)
+            !un2 = un**2
+            !if(lboundary(3).and.j==1.and.v0(sx,2,min(k,kmax))>0) then
+            !  un2 = un2+v0(sx,2,min(k,kmax))**2
+            !endif
+            !if(lboundary(4).and.j==nx1.and.v0(sx,j2,min(k,kmax))<0) then
+            !  un2 = un2+v0(sx,j2,min(k,kmax))**2
+            !endif
+            !if(lboundary(5).and.k==nx2.and.w0(sx,min(j+1,j1),k1)<0) then
+            !  un2 = un2+w0(sx,min(j+1,j1),k1)**2
+            !endif
+            !un = un/sqrt(un2)
             e = e120(sx,min(j+1,j1),min(k,kmax))
             coefdir = abs(un)**pbc
             coefneu = -tauh*un*(abs(un)**pbc+e**pbc)
@@ -1026,17 +1066,17 @@ contains
           if(un>=0) then ! Homogeneous Neumann outflow
             a(ex+1,j+1,k)=a(ex,j+1,k)
           else ! Robin inflow conditions
-            un2 = un**2
-            if(lboundary(3).and.j==1.and.v0(i1,2,min(k,kmax))>0) then
-              un2 = un2+v0(i1,2,min(k,kmax))**2
-            endif
-            if(lboundary(4).and.j==nx1.and.v0(i1,j2,min(k,kmax))<0) then
-              un2 = un2+v0(i1,j2,min(k,kmax))**2
-            endif
-            if(lboundary(5).and.k==nx2.and.w0(i1,min(j+1,j1),k1)<0) then
-              un2 = un2+w0(i1,min(j+1,j1),k1)**2
-            endif
-            un = un/sqrt(un2)
+            !un2 = un**2
+            !if(lboundary(3).and.j==1.and.v0(i1,2,min(k,kmax))>0) then
+            !  un2 = un2+v0(i1,2,min(k,kmax))**2
+            !endif
+            !if(lboundary(4).and.j==nx1.and.v0(i1,j2,min(k,kmax))<0) then
+            !  un2 = un2+v0(i1,j2,min(k,kmax))**2
+            !endif
+            !if(lboundary(5).and.k==nx2.and.w0(i1,min(j+1,j1),k1)<0) then
+            !  un2 = un2+w0(i1,min(j+1,j1),k1)**2
+            !endif
+            !un = un/sqrt(un2)
             e = e120(ex,min(j+1,j1),min(k,kmax))
             coefdir = abs(un)**pbc
             coefneu = -tauh*un*(abs(un)**pbc+e**pbc)
@@ -1054,17 +1094,17 @@ contains
           if(un<=0) then ! Homogeneous Neumann outflow
             a(i+1,sy-1,k)=a(i+1,sy,k)
           else ! Robin inflow conditions
-            un2 = un**2
-            if(lboundary(1).and.i==1.and.u0(2,sy,min(k,kmax))>0) then
-              un2 = un2+u0(2,sy,min(k,kmax))**2
-            endif
-            if(lboundary(2).and.i==nx1.and.u0(i2,sy,min(k,kmax))<0) then
-              un2 = un2+u0(i2,sy,min(k,kmax))**2
-            endif
-            if(lboundary(5).and.k==nx2.and.w0(min(i+1,i1),sy,k1)<0) then
-              un2 = un2+w0(min(i+1,i1),sy,k1)**2
-            endif
-            un = un/sqrt(un2)
+            !un2 = un**2
+            !if(lboundary(1).and.i==1.and.u0(2,sy,min(k,kmax))>0) then
+            !  un2 = un2+u0(2,sy,min(k,kmax))**2
+            !endif
+            !if(lboundary(2).and.i==nx1.and.u0(i2,sy,min(k,kmax))<0) then
+            !  un2 = un2+u0(i2,sy,min(k,kmax))**2
+            !endif
+            !if(lboundary(5).and.k==nx2.and.w0(min(i+1,i1),sy,k1)<0) then
+            !  un2 = un2+w0(min(i+1,i1),sy,k1)**2
+            !endif
+            !un = un/sqrt(un2)
             e = e120(min(i+1,i1),sy,min(k,kmax))
             coefdir = abs(un)**pbc
             coefneu = -tauh*un*(abs(un)**pbc+e**pbc)
@@ -1082,17 +1122,17 @@ contains
           if(un>=0) then ! Homogeneous Neumann outflow
             a(i+1,ey+1,k)=a(i+1,ey,k)
           else ! Robin inflow conditions
-            un2 = un**2
-            if(lboundary(1).and.i==1.and.u0(2,j1,min(k,kmax))>0) then
-              un2 = un2+u0(2,j1,min(k,kmax))**2
-            endif
-            if(lboundary(2).and.i==nx1.and.u0(i2,j1,min(k,kmax))<0) then
-              un2 = un2+u0(i2,j1,min(k,kmax))**2
-            endif
-            if(lboundary(5).and.k==nx2.and.w0(min(i+1,i1),j1,k1)<0) then
-              un2 = un2+w0(min(i+1,i1),j1,k1)**2
-            endif
-            un = un/sqrt(un2)
+            !un2 = un**2
+            !if(lboundary(1).and.i==1.and.u0(2,j1,min(k,kmax))>0) then
+            !  un2 = un2+u0(2,j1,min(k,kmax))**2
+            !endif
+            !if(lboundary(2).and.i==nx1.and.u0(i2,j1,min(k,kmax))<0) then
+            !  un2 = un2+u0(i2,j1,min(k,kmax))**2
+            !endif
+            !if(lboundary(5).and.k==nx2.and.w0(min(i+1,i1),j1,k1)<0) then
+            !  un2 = un2+w0(min(i+1,i1),j1,k1)**2
+            !endif
+            !un = un/sqrt(un2)
             e = e120(min(i+1,i1),ey,min(k,kmax))
             coefdir = abs(un)**pbc
             coefneu = -tauh*un*(abs(un)**pbc+e**pbc)
@@ -1117,20 +1157,20 @@ contains
           if(un>=0) then ! Neumann outflow
             a(i+1,j+1,ez)=ddz*dzh(ez)+a(i+1,j+1,ez-1)
           else ! Robin inflow conditions
-            un2 = un**2
-            if(lboundary(1).and.i==1.and.u0(2,min(j+1,j1),kmax)>0) then
-              un2 = un2+u0(2,min(j+1,j1),kmax)**2
-            endif
-            if(lboundary(2).and.i==nx1.and.u0(i2,min(j+1,j1),kmax)<0) then
-              un2 = un2+u0(i2,min(j+1,j1),kmax)**2
-            endif
-            if(lboundary(3).and.j==1.and.v0(min(i+1,i1),2,kmax)>0) then
-              un2 = un2+v0(min(i+1,i1),2,kmax)**2
-            endif
-            if(lboundary(4).and.j==nx2.and.v0(min(i+1,i1),j2,kmax)<0) then
-              un2 = un2+v0(min(i+1,i1),j2,kmax)**2
-            endif
-            un = un/sqrt(un2)
+            !un2 = un**2
+            !if(lboundary(1).and.i==1.and.u0(2,min(j+1,j1),kmax)>0) then
+            !  un2 = un2+u0(2,min(j+1,j1),kmax)**2
+            !endif
+            !if(lboundary(2).and.i==nx1.and.u0(i2,min(j+1,j1),kmax)<0) then
+            !  un2 = un2+u0(i2,min(j+1,j1),kmax)**2
+            !endif
+            !if(lboundary(3).and.j==1.and.v0(min(i+1,i1),2,kmax)>0) then
+            !  un2 = un2+v0(min(i+1,i1),2,kmax)**2
+            !endif
+            !if(lboundary(4).and.j==nx2.and.v0(min(i+1,i1),j2,kmax)<0) then
+            !  un2 = un2+v0(min(i+1,i1),j2,kmax)**2
+            !endif
+            !un = un/sqrt(un2)
             e = e120(min(i+1,i1),min(j+1,j1),ez-1)
             coefdir = abs(un)**pbc
             coefneu = -tauh*un*(abs(un)**pbc+e**pbc)
@@ -1149,7 +1189,7 @@ contains
     ! for the boundary normal velocity components. Adds synthetic turbulence to
     ! the inflow dirichlet boundaries if lsynturb=.true.
     use mpi
-    use modmpi, only : MY_REAL,myidx,myidy
+    use modmpi, only : MY_REAL,myidx,myidy,myid
     use modglobal, only : dx,dy,dzf,dxi,dyi,rdt,i2,j2,k1,i1,j1,kmax,rtimee,rdt,itot,jtot,imax,jmax,grav,taum
     use modfields, only : um,u0,up,vm,v0,vp,wm,w0,wp,rhobf,rhobh,thvh,thv0h
     implicit none

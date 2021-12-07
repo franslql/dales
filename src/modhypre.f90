@@ -460,7 +460,7 @@ contains
     do k=1,kmax
       do j=1,jmax
         do i=1,imax
-          values(i,j) = p(i,j,k)
+          values(i,j) = 0.!p(i,j,k)
         enddo
       enddo
       ilower(3) = k - 1

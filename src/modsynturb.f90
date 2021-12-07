@@ -33,10 +33,10 @@ real, allocatable, dimension(:) :: xf,xh,yf,yh
 real :: nisqrt,ctot,nisqrt2
 real, dimension(3) :: lambdasxyz
 integer :: nxpatch,nypatch,nzpatch
-integer, parameter :: isepsim_mom = 10, isynturb_mom = 0, isynturb_all = 1
+integer, parameter :: isepsim_mom = 10,isepsim_all=11, isynturb_mom = 0, isynturb_all = 1
 integer :: ntturb,itimestep=1
 real, allocatable, dimension(:) :: tturb
-real, allocatable, dimension(:,:,:) :: uturbin,vturbin,wturbin
+real, allocatable, dimension(:,:,:) :: uturbin,vturbin,wturbin,thlturbin,qtturbin
 character(len = nf90_max_name) :: RecordDimName
 integer :: VARID,STATUS,NCID,mpierr,timeID
 ! ! Uncommend for netcdf output turbulent pertubations west boundary
@@ -56,7 +56,7 @@ type(randomNumberSequence) :: randomNumbers
 contains
   subroutine initsynturb
     use netcdf
-    use modglobal, only : dx,dy,imax,jmax,i1,j1,zf,lambdas,lambdas_x,lambdas_y,lambdas_z,kmax,k1,cexpnr
+    use modglobal, only : dx,dy,imax,jmax,i1,j1,zf,lambdas,lambdas_x,lambdas_y,lambdas_z,kmax,k1,cexpnr,lmoist
     use modmpi, only : myidx, myidy
     implicit none
     integer :: i,j,ib
@@ -115,7 +115,7 @@ contains
                  ! & boundary(ib)%randthl(boundary(ib)%nx1,boundary(ib)%nx2), &
                  ! & boundary(ib)%randqt(boundary(ib)%nx1,boundary(ib)%nx2))
         end do
-      elseif(iturb == isepsim_mom .and. lboundary(1)) then
+      elseif((iturb == isepsim_mom .or. iturb == isepsim_all) .and. lboundary(1)) then
         !--- open nc file ---
         STATUS = NF90_OPEN('turb.inp.'//cexpnr//'.nc', nf90_nowrite, NCID)
         if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
@@ -150,6 +150,22 @@ contains
         if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
         STATUS = NF90_GET_VAR (NCID, VARID, wturbin, start=(/myidy*jmax+1,1,1/), &
           & count=(/jmax,k1,ntturb/))
+	if(iturb==isepsim_all) then
+	  allocate(thlturbin(jmax,kmax,ntturb))
+          ! Read thl
+          STATUS = NF90_INQ_VARID(NCID,'thlturbwest', VARID)
+          if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+          STATUS = NF90_GET_VAR (NCID, VARID, thlturbin, start=(/myidy*jmax+1,1,1/), &
+            & count=(/jmax,kmax,ntturb/))
+	  if(lmoist) then
+	    allocate(qtturbin(jmax,kmax,ntturb))
+            ! qt
+            STATUS = NF90_INQ_VARID(NCID,'wturbwest', VARID)
+            if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+            STATUS = NF90_GET_VAR (NCID, VARID, wturbin, start=(/myidy*jmax+1,1,1/), &
+              & count=(/jmax,k1,ntturb/))
+          endif
+        endif
       endif
       ! ! Uncommend for netcdf output turbulent pertubations west boundary
       ! if(lboundary(1)) then
@@ -188,6 +204,7 @@ contains
   end subroutine handle_err
 
   subroutine exitsynturb
+    use modglobal, only : lmoist
     implicit none
     integer :: ib
     if(.not.lsynturb) return
@@ -206,6 +223,9 @@ contains
         deallocate(kn,q,p,omega,xf,xh,yf,yh,k_thl,k_qt,omega_thl,omega_qt,p_thl,p_qt,q_thl,q_qt)
       elseif(iturb == isepsim_mom .and. lboundary(1)) then
         deallocate(uturbin,vturbin,wturbin)
+      elseif(iturb == isepsim_all .and. lboundary(1)) then
+	deallocate(uturbin,vturbin,wturbin,thlturbin)
+	if(lmoist) deallocate(qtturbin)
       endif
     endif
   end subroutine exitsynturb
@@ -221,14 +241,15 @@ contains
   ! end subroutine check
 
   subroutine synturb()
+    implicit none
     if(.not.lsynturb) return
     select case(iturb)
     case(isynturb_mom)
       call synturb_mom()
     case(isynturb_all)
       call synturb_all()
-    case(isepsim_mom)
-      call sepsim_mom()
+    case(isepsim_mom, isepsim_all)
+      call sepsim
     end select
   end subroutine synturb
 
@@ -301,8 +322,8 @@ contains
     end do
   end subroutine synturb_all
 
-  subroutine sepsim_mom()
-    use modglobal, only : rtimee,rdt
+  subroutine sepsim()
+    use modglobal, only : rtimee,rdt,lmoist
     use modmpi, only : myid
     implicit none
     integer :: ib
@@ -320,6 +341,10 @@ contains
         boundary(ib)%uturb = uturbin(:,:,itimestep)
         boundary(ib)%vturb = vturbin(:,:,itimestep)
         boundary(ib)%wturb = wturbin(:,:,itimestep)
+	if(iturb==11) then
+	  boundary(ib)%thlturb = thlturbin(:,:,itimestep)
+	  if(lmoist) boundary(ib)%qtturb = qtturbin(:,:,itimestep)
+	endif
       case(2)
         ! Do nothing (needs to be added)
       case(3)
@@ -330,7 +355,7 @@ contains
         ! Do nothing (needs to be added)
       end select
     end do
-  end subroutine
+  end subroutine sepsim
 
   subroutine calc_eigdec(ib)
     use modglobal, only : rtimee,rdt,tboundary,ntboundary

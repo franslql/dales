@@ -715,7 +715,7 @@ contains
     use mpi
     use modmpi,     only : my_real, mpierr, comm3d, mpi_sum, excjs, mpi_integer
     use moduser,    only : surf_user
-    use modopenboundary, only : openboundary_excjs,openboundary_sfc
+    use modopenboundary, only : openboundary_excjs
     implicit none
 
     integer  :: i, j, n, patchx, patchy
@@ -886,9 +886,7 @@ contains
       call do_lsm
 
     elseif(isurf == 2) then
-      if(lopenbc .and. lsfc_thl) then
-        call openboundary_sfc
-      else
+      if(.not.(lopenbc .and. lsfc_thl)) then
         do j = 2, j1
           do i = 2, i1
             if(lhetero) then

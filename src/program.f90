@@ -100,14 +100,15 @@ program DALES
 !!----------------------------------------------------------------
 !!     0.0    USE STATEMENTS FOR CORE MODULES
 !!----------------------------------------------------------------
+  use mpi
   use modglobal,         only : rk3step,timeleft,lopenbc
-  use modmpi,            only : initmpicomm
+  use modmpi,            only : initmpicomm,myid
   use modstartup,        only : startup, writerestartfiles,testwctime,exitmodules
   use modtimedep,        only : timedep
   use modboundary,       only : boundary, grwdamp! JvdD ,tqaver
   use modthermodynamics, only : thermodynamics
   use modmicrophysics,   only : microsources
-  use modsurface,        only : surface
+  use modsurface,        only : surface,qtsurf
   use modsubgrid,        only : subgrid
   use modforces,         only : forces, coriolis, lstend
   use modradiation,      only : radiation
@@ -119,7 +120,7 @@ program DALES
 !     0.1     USE STATEMENTS FOR ADDONS STATISTICAL ROUTINES
 !----------------------------------------------------------------
   use modcape,         only : initcape,exitcape,docape
-  use modchecksim,     only : initchecksim, checksim
+  use modchecksim,     only : initchecksim, checksim,chkdiv
   use modstat_nc,      only : initstat_nc
   !use modspectra2,     only : dospecs,initspectra2,tanhfilter
   use modtimestat,     only : inittimestat, timestat
@@ -150,12 +151,13 @@ program DALES
   !use modprojection,   only : initprojection, projection
   use modchem,         only : initchem,twostep
   use modcanopy,       only : initcanopy, canopy, exitcanopy
-  use modopenboundary, only : openboundary_ghost,openboundary_tend,openboundary_phasevelocity,openboundary_turb
-
+  use modopenboundary, only : openboundary_ghost,openboundary_tend,openboundary_phasevelocity,openboundary_turb,openboundary_sfc
+  use modsurfdata, only : thls
+  use modfields, only : thlp,up,vp,wp,um,vm,wm,u0,v0,w0
 
 
   implicit none
-
+  real :: time_poisson = 0., time_ghost = 0., time_tend = 0.,time_begin = 0., time_end = 0.
 !----------------------------------------------------------------
 !     1      READ NAMELISTS,INITIALISE GRID, CONSTANTS AND FIELDS
 !----------------------------------------------------------------
@@ -208,6 +210,10 @@ program DALES
     !  exit
     !endif
     call timedep
+    if(lopenbc) then 
+        call openboundary_sfc()
+        call qtsurf()
+    endif
     call samptend(tend_start,firstterm=.true.)
 
 !-----------------------------------------------------
@@ -215,8 +221,14 @@ program DALES
 !-----------------------------------------------------
     if(lopenbc) then
       call openboundary_turb
+      time_begin = MPI_wtime()
       call openboundary_ghost
+      time_end   = MPI_wtime()
+      time_ghost = time_ghost+time_end-time_begin
+      time_begin = MPI_wtime()
       call openboundary_tend
+      time_end   = MPI_wtime()
+      time_tend = time_tend+time_end-time_begin
     endif
 
 !-----------------------------------------------------
@@ -268,11 +280,26 @@ program DALES
     call grwdamp !damping at top of the model
 !JvdD    call tqaver !set thl, qt and sv(n) equal to slab average at level kmax
     call samptend(tend_topbound)
+    !if(any(u0/=u0)) print *,myid,'nan in u0'
+    !if(any(v0/=v0)) print *,myid,'nan in v0'
+    !if(any(w0/=w0)) print *,myid,'nan in w0'
+    !if(any(um/=um)) print *,myid,'nan in um'
+    !if(any(vm/=vm)) print *,myid,'nan in vm'
+    !if(any(wm/=wm)) print *,myid,'nan in wm'
+    !print *, 'before poisson',myid, maxval(abs(up)),maxval(abs(vp)),maxval(abs(wp))
+    time_begin = MPI_wtime()
     call poisson
+    time_end   = MPI_wtime()
+    time_poisson = time_poisson+time_end-time_begin
     call samptend(tend_pois,lastterm=.true.)
+    if(lopenbc) call openboundary_phasevelocity()
+    !print *, 'before integrate',myid,maxval(abs(up)),maxval(abs(vp)),maxval(abs(wp))
     call tstep_integrate                        ! Apply tendencies to all variables
     if(lopenbc) then
+      time_begin = MPI_wtime()
       call openboundary_ghost
+      time_end   = MPI_wtime()
+      time_ghost = time_ghost+time_end-time_begin
     else
       call boundary
     endif
@@ -342,5 +369,10 @@ program DALES
   call exitheterostats
   call exitcanopy
   call exitmodules
-
+  if(myid==0) then
+    print *,"timings"
+    print *,"time openboundary_ghost",time_ghost
+    print *,"time openboundary_tend",time_tend
+    print *,"time poisson",time_poisson
+  endif
 end program DALES

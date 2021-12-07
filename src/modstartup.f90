@@ -436,7 +436,7 @@ contains
 
     use modtestbed,        only : ltestbed,tb_ps,tb_thl,tb_qt,tb_u,tb_v,tb_w,tb_ug,tb_vg,&
                                   tb_dqtdxls,tb_dqtdyls,tb_qtadv,tb_thladv
-    use modopenboundary,   only : openboundary_ghost,openboundary_readboundary,openboundary_initfields
+    use modopenboundary,   only : openboundary_ghost,openboundary_readboundary,openboundary_initfields,openboundary_divcorr
     use modchecksim,       only : chkdiv
 
     integer i,j,k,n
@@ -648,7 +648,7 @@ contains
         phiwm  = phiw
         Wlm    = Wl
       case(2,5)
-        if(.not.(lopenbc.and.lsfc_thl.and.isurf==2)) then
+        if(.not.(lopenbc.and.lsfc_thl)) then
           tskin  = thls
         endif
       case(3,4)
@@ -659,6 +659,10 @@ contains
       case(10)
         call initsurf_user
       end select
+      if(lopenbc) then
+        call openboundary_readboundary
+        call openboundary_ghost
+      endif
 
       ! Set initial Obukhov length to -0.1 for iteration
       obl   = -0.1
@@ -679,9 +683,7 @@ contains
 
       call baseprofs ! call baseprofs before thermodynamics
       if(lopenbc) then
-        call openboundary_readboundary
-        call openboundary_ghost
-        call chkdiv
+        call openboundary_divcorr()
       else
         call boundary
       endif

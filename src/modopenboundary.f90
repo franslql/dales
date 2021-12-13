@@ -570,6 +570,8 @@ contains
     rhointi = 1./(rhobf*dzf)
     ! Initial field correction using the pressure solver
     allocate(pcorr(2-ih:i1+ih,2-jh:j1+jh,kmax))
+    do while(.True.)
+    iter = 0
     do k=1,kmax
       do j=2,j1
         do i=2,i1
@@ -629,8 +631,10 @@ contains
                           MPI_SUM, comm3d,mpierr)
     call MPI_ALLREDUCE(divmaxl, divmax, 1,    MY_REAL, &
                           MPI_MAX, comm3d,mpierr)
-
-    if(myid==0) print *, 'divmax, divtot = ', divmax, divtot
+    iter = iter + 1
+    if(myid==0) print *, 'divmax, divtot = ', divmax, divtot, iter
+    if(iter==maxiter .or. divmax <= 1e-5) exit
+    end do
     deallocate(pcorr)
   end subroutine openboundary_divcorr
 

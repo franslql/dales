@@ -430,14 +430,17 @@ contains
     ! Correct for any integrated divergence present in the boundary input
     use mpi
     use modmpi, only : myid,comm3d,mpierr,MY_REAL
-    use modglobal, only : imax,jmax,kmax,dzf,dy,dx,xsize,ysize,zh,k1,lwarmstart,i1,i2,j1,j2
+    use modglobal, only : imax,jmax,kmax,dzf,dy,dx,xsize,ysize,zh,k1,lwarmstart,i1,i2,j1,j2,ih,jh,dzh
     use modfields, only : u0,um,v0,vm,w0,wm,rhobf,rhobh
+    use modhypre, only : solve_hypre,set_initial_guess
     !use modchecksim, only : chkdiv
     implicit none
-    real :: sumdiv,divold,divnew,div,divpart
+    real :: sumdiv,divold,divnew,div,divpart,divmax,divtot,divmaxl,divtotl
     integer :: i,j,k,it,iter
     integer,parameter :: maxiter = 20
     real,parameter :: maxdiv = 1e-10
+    real,dimension(:,:,:),allocatable :: pcorr
+    logical :: converged
     ! Divergence correction
     if(myid==0) print *, "Start divergence correction"
     do it = 1,ntboundary
@@ -565,6 +568,65 @@ contains
     ! Create 1/int(rho)
     allocate(rhointi(k1))
     rhointi = 1./(rhobf*dzf)
+    ! Initial field correction using the pressure solver
+    allocate(pcorr(2-ih:i1+ih,2-jh:j1+jh,kmax))
+    do k=1,kmax
+      do j=2,j1
+        do i=2,i1
+          pcorr(i,j,k)  =  rhobf(k)*( (um(i+1,j,k)-um(i,j,k))/dx &
+                                     +(vm(i,j+1,k)-vm(i,j,k))/dy ) &
+                      +(wm(i,j,k+1)*rhobh(k+1)-wm(i,j,k)*rhobh(k))/dzf(k)
+        end do
+      end do
+    end do
+    call set_initial_guess(pcorr)
+    call solve_hypre(pcorr, converged)
+    call set_initial_guess(pcorr)
+    do k=1,kmax
+      do j=2,j1
+        do i=2,i1
+          um(i,j,k) = um(i,j,k)-(pcorr(i,j,k)-pcorr(i-1,j,k))/dx
+          vm(i,j,k) = vm(i,j,k)-(pcorr(i,j,k)-pcorr(i,j-1,k))/dy
+        end do
+      end do
+    end do
+    do k=2,kmax
+      do j=2,j1
+        do i=2,i1
+          wm(i,j,k) = wm(i,j,k)-(pcorr(i,j,k)-pcorr(i,j,k-1))/dzh(k)
+        end do
+      end do
+    end do
+    u0 = um
+    v0 = vm
+    w0 = wm
+    call openboundary_ghost
+    ! Check divergence
+    divmax = 0.
+    divtot = 0.
+    divmaxl= 0.
+    divtotl= 0.
+
+    do k=1,kmax
+      do j=2,j1
+        do i=2,i1
+          div = &
+                rhobf(k) * (u0(i+1,j,k) - u0(i,j,k) )/dx + &
+                rhobf(k) * (v0(i,j+1,k) - v0(i,j,k) )/dy + &
+                (rhobh(k+1)*w0(i,j,k+1) - rhobh(k)*w0(i,j,k) )/dzf(k)
+          divmaxl = max(divmaxl,abs(div))
+          divtotl = divtotl + div*dx*dy*dzf(k)
+        end do
+      end do
+    end do
+
+    call MPI_ALLREDUCE(divtotl, divtot, 1,    MY_REAL, &
+                          MPI_SUM, comm3d,mpierr)
+    call MPI_ALLREDUCE(divmaxl, divmax, 1,    MY_REAL, &
+                          MPI_MAX, comm3d,mpierr)
+
+    if(myid==0) print *, 'divmax, divtot = ', divmax, divtot
+    deallocate(pcorr)
   end subroutine openboundary_divcorr
 
   subroutine openboundary_ghost

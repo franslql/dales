@@ -582,6 +582,11 @@ contains
     call set_initial_guess(pcorr)
     call solve_hypre(pcorr, converged)
     call set_initial_guess(pcorr)
+    call openboundary_excjs(pcorr   , 2,i1,2,j1,1,kmax,ih,jh,.not.lboundary(1:4).or.lperiodic(1:4))
+    if(lboundary(1).and. .not. lperiodic(1)) pcorr(1,:,:) = pcorr(2,:,:)
+    if(lboundary(2).and. .not. lperiodic(2)) pcorr(i2,:,:) = pcorr(i1,:,:)
+    if(lboundary(3).and. .not. lperiodic(3)) pcorr(:,1,:) = pcorr(:,2,:)
+    if(lboundary(4).and. .not. lperiodic(4)) pcorr(:,j2,:) = pcorr(:,j1,:)
     do k=1,kmax
       do j=2,j1
         do i=2,i1

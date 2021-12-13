@@ -572,15 +572,26 @@ contains
     allocate(pcorr(2-ih:i1+ih,2-jh:j1+jh,kmax))
     iter = 0
     do while(.True.)
+    divmax = 0.
+    divtot = 0.
+    divmaxl= 0.
+    divtotl= 0.
     do k=1,kmax
       do j=2,j1
         do i=2,i1
           pcorr(i,j,k)  =  rhobf(k)*( (um(i+1,j,k)-um(i,j,k))/dx &
                                      +(vm(i,j+1,k)-vm(i,j,k))/dy ) &
                       +(wm(i,j,k+1)*rhobh(k+1)-wm(i,j,k)*rhobh(k))/dzf(k)
+          divmaxl = max(divmaxl,abs(pcorr(i,j,k)))
+          divtotl = divtotl + pcorr(i,j,k)*dx*dy*dzf(k)
         end do
       end do
     end do
+    call MPI_ALLREDUCE(divtotl, divtot, 1,    MY_REAL, &
+                          MPI_SUM, comm3d,mpierr)
+    call MPI_ALLREDUCE(divmaxl, divmax, 1,    MY_REAL, &
+                          MPI_MAX, comm3d,mpierr)
+    if(myid==0) print *, 'pcorr divtot', divtot
     call set_initial_guess(pcorr)
     call solve_hypre(pcorr, converged)
     call set_initial_guess(pcorr)

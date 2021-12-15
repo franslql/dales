@@ -570,8 +570,8 @@ contains
     rhointi = 1./(rhobf*dzf)
     ! Initial field correction using the pressure solver
     allocate(pcorr(2-ih:i1+ih,2-jh:j1+jh,kmax))
-    iter = 0
     do while(.True.)
+    iter = 0
     do k=1,kmax
       do j=2,j1
         do i=2,i1

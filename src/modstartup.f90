@@ -84,7 +84,7 @@ contains
     use modmpi,            only : initmpi,commwrld,my_real,myid,nprocx,nprocy,mpierr,periods
     use modchem,           only : initchem
     use modversion,        only : git_version
-    use modopenboundary,   only : initopenboundary,openboundary_divcorr
+    use modopenboundary,   only : initopenboundary
 
     implicit none
     integer :: ierr
@@ -321,7 +321,7 @@ contains
     call readinitfiles ! moved to obtain the correct btime for the timedependent forcings in case of a warmstart
     call inittimedep !depends on modglobal,modfields, modmpi, modsurf, modradiation
     call initpois ! hypre solver needs grid and baseprofiles
-    call openboundary_divcorr
+
     call checkinitvalues
 
 
@@ -444,7 +444,7 @@ contains
 
     use modtestbed,        only : ltestbed,tb_ps,tb_thl,tb_qt,tb_u,tb_v,tb_w,tb_ug,tb_vg,&
                                   tb_dqtdxls,tb_dqtdyls,tb_qtadv,tb_thladv
-    use modopenboundary,   only : openboundary_ghost,openboundary_readboundary,openboundary_initfields
+    use modopenboundary,   only : openboundary_ghost,openboundary_readboundary,openboundary_initfields,openboundary_divcorr
 
     integer i,j,k,n
     logical negval !switch to allow or not negative values in randomnization
@@ -691,7 +691,7 @@ contains
 
       call baseprofs ! call baseprofs before thermodynamics
       if(lopenbc) then
-        call openboundary_ghost()
+        call openboundary_divcorr()
       else
         call boundary
       endif

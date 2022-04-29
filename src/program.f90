@@ -130,6 +130,7 @@ program DALES
   use modsampling,     only : initsampling, sampling,exitsampling
   use modquadrant,     only : initquadrant, quadrant,exitquadrant
   use modcrosssection, only : initcrosssection, crosssection,exitcrosssection
+  use modmeancrosssection, only : initmeancrosssection, meancrosssection,exitmeancrosssection
   use modAGScross,     only : initAGScross, AGScross,exitAGScross
   use modlsmcrosssection, only : initlsmcrosssection, lsmcrosssection,exitlsmcrosssection
   use modcloudfield,   only : initcloudfield, cloudfield
@@ -179,6 +180,7 @@ program DALES
   call initsampling
   call initquadrant
   call initcrosssection
+  call initmeancrosssection
   call initAGScross
   call initlsmcrosssection
   !call initprojection
@@ -309,6 +311,7 @@ program DALES
     call sampling
     call quadrant
     call crosssection
+    call meancrosssection
     call AGScross
     call lsmcrosssection
     !call tanhfilter
@@ -353,6 +356,7 @@ program DALES
   call exitvarbudget
   !call exitstressbudget
   call exitcrosssection
+  call exitmeancrosssection
   call exitAGScross
   call exitlsmcrosssection
   call exitcape

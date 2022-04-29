@@ -11,11 +11,8 @@
 !  - Allow for different zint and adjust rhointi accordingly
 !  - Correct non divergence free input more elegently
 !  - Change definition uphase for division by 0
-!  - When to use nextval and currentval for nudging and check rtimee
 !  - How to handle vertical derivative in top boundary condition (full levels) now obtained from profile (horizontal average)
 !  - Use correct velocity level to determine in or outflow in full levels, half levels are used now
-!  - Check rtimee and half level nudgin and correction term
-!  - Use um or u0 in half levels
 !  - Add possibility for higher order integration schemes
 !  - Extent turbulent pertubation generation options
 !

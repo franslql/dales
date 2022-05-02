@@ -19,7 +19,7 @@
 !  Based on hypre/src/test/f77_struct.f
 
 module modhypre
-use modglobal, only : solver_type
+use modglobal, only : solver_type, hypre_logging
 implicit none
 private
 public :: inithypre_grid, inithypre_solver, solve_hypre, exithypre_grid, exithypre_solver, set_initial_guess, set_zero_guess
@@ -57,8 +57,8 @@ contains
     else if (solver%precond_id == 1) then
       call HYPRE_StructPFMGCreate(mpi_comm_hypre, solver%precond, ierr)
       call HYPRE_StructPFMGSetMaxIter(solver%precond, solver%maxiter_precond, ierr)
-      ! weighted Jacobi = 1; red-black GS = 2
-      call HYPRE_StructPFMGSetRelaxType(solver%precond, 1, ierr)
+      ! weighted Jacobi = 1; red-black GS = 2    2 seems faster
+      call HYPRE_StructPFMGSetRelaxType(solver%precond, 2, ierr)
       call HYPRE_StructPFMGSetNumPreRelax(solver%precond, solver%n_pre, ierr)
       call HYPRE_StructPFMGSetNumPostRelax(solver%precond, solver%n_post, ierr)
       call HYPRE_StructPFMGSetTol(solver%precond, 0.0d0, ierr)
@@ -114,7 +114,7 @@ contains
 
     ! data num_ghost / 3, 3, 3, 3, 0, 0 /
 
-    allocate(values(imax*jmax*kmax),temp(max(imax,jmax)))
+    allocate(values(imax*jmax*7),temp(max(imax,jmax)))
 
     ! Have hypre reuse the comm world
     mpi_comm_hypre = MPI_COMM_WORLD
@@ -253,6 +253,41 @@ contains
         values(i+6) = cc ! center
       enddo
 
+      ! Modify the matrix at a single point to fix the over-all p
+      ! makes the matrix non-singular which may improve convergence
+      ! matrix is made symmetric by not coupling to the special element
+      ! if that element is 0, the couplings of other elements can be set to 0
+      ! note: assumes kmax > 10, just to put the special point well inside the domain
+      if (k == kmax-10 .and. myidx == 0 .and. myidy == 0) then
+         i = imax/2
+         j = jmax/2
+         values( (i+j*imax)*7 + 1) = 0
+         values( (i+j*imax)*7 + 2) = 0
+         values( (i+j*imax)*7 + 3) = 0
+         values( (i+j*imax)*7 + 4) = 0
+         values( (i+j*imax)*7 + 5) = 0
+         values( (i+j*imax)*7 + 6) = 0
+         values( (i+j*imax)*7 + 7) = cc  ! value here doesn't matter in theory, probably better conditioning if
+                                         ! similar to other diagonal values
+
+         !! from here on, it's the neighbors of the special element
+         values( (i+1+j*imax)*7 + 1) = 0    ! west link of east neighbor
+         values( (i-1+j*imax)*7 + 2) = 0    ! east link of west neighbor
+         values( (i+(j+1)*imax)*7 + 3) = 0  ! south link of north neighbor
+         values( (i+(j-1)*imax)*7 + 4) = 0  ! north link of south neighbor
+      end if
+      if (k == kmax-9 .and. myidx == 0 .and. myidy == 0) then
+         i = imax/2
+         j = jmax/2
+         values( (i+j*imax)*7 + 5) = 0      ! down link of above neighbor
+      end if
+      if (k == kmax-11 .and. myidx == 0 .and. myidy == 0) then
+         i = imax/2
+         j = jmax/2
+         values( (i+j*imax)*7 + 6) = 0      ! up link of below neighbor
+      end if
+
+
       call HYPRE_StructMatrixSetBoxValues(matrixA, &
            ilower, iupper, 7, stencil_indices, values, ierr)
       if(lopenbc) then ! Set potential neuman lateral boundary conditions
@@ -320,7 +355,7 @@ contains
 
     ! initialize some values as starting point for the iterative solver
     do i=1,imax*jmax
-        values(i) = 1e-5
+        values(i) = 0 !1e-5
     enddo
     do k=1,kmax
       ilower(3) = k - 1
@@ -361,7 +396,7 @@ contains
       call HYPRE_StructSMGSetRelChange(solver%solver, zero, ierr)
       call HYPRE_StructSMGSetNumPreRelax(solver%solver, solver%n_pre, ierr)
       call HYPRE_StructSMGSetNumPostRelax(solver%solver, solver%n_post, ierr)
-      call HYPRE_StructSMGSetLogging(solver%solver, 1, ierr)
+      call HYPRE_StructSMGSetLogging(solver%solver, hypre_logging, ierr)
       call HYPRE_StructSMGSetup(solver%solver, matrixA, vectorB, vectorX, ierr)
     else if (solver%solver_id == 2) then
       ! Solve the system using PFMG
@@ -387,7 +422,7 @@ contains
       ! call HYPRE_StructPFMGSetSkipRelax(solver, one)
       ! call HYPRE_StructPFMGSetDxyz(solver, dxyz, ierr)
 
-      call HYPRE_StructPFMGSetLogging(solver%solver, 2, ierr)
+      call HYPRE_StructPFMGSetLogging(solver%solver, hypre_logging, ierr)
       call HYPRE_StructPFMGSetup(solver%solver, matrixA, vectorB, vectorX, ierr)
 
     else if (solver%solver_id == 3) then
@@ -401,7 +436,7 @@ contains
       call initprecond(solver)
       call HYPRE_StructBiCGSTABSetPrecond(solver%solver, solver%precond_id, solver%precond, ierr)
 
-      call HYPRE_StructBiCGSTABSetLogging(solver%solver, 2, ierr)
+      call HYPRE_StructBiCGSTABSetLogging(solver%solver, hypre_logging, ierr)
       call HYPRE_StructBiCGSTABSetup(solver%solver, matrixA, vectorB, vectorX, ierr)
 
     else if (solver%solver_id == 4) then
@@ -415,7 +450,7 @@ contains
       call initprecond(solver)
       call HYPRE_StructGMRESSetPrecond(solver%solver, solver%precond_id, solver%precond, ierr)
 
-      call HYPRE_StructGMRESSetLogging(solver%solver, 2, ierr)
+      call HYPRE_StructGMRESSetLogging(solver%solver, hypre_logging, ierr)
       call HYPRE_StructGMRESSetup(solver%solver, matrixA, vectorB, vectorX, ierr)
 
     else if (solver%solver_id == 5) then
@@ -430,8 +465,8 @@ contains
       call initprecond(solver)
       call HYPRE_StructPCGSetPrecond(solver%solver, solver%precond_id, solver%precond, ierr)
 
-      call HYPRE_StructPCGSetLogging(solver%solver, 2, ierr)
-      call HYPRE_StructPCGSetPrintLevel(solver%solver, 0, ierr)
+      call HYPRE_StructPCGSetLogging(solver%solver, hypre_logging, ierr)
+      call HYPRE_StructPCGSetPrintLevel(solver%solver, hypre_logging, ierr)
       call HYPRE_StructPCGSetup(solver%solver, matrixA, vectorB, vectorX, ierr)
 
     else if (solver%solver_id == 6) then
@@ -445,8 +480,8 @@ contains
       call initprecond(solver)
       call HYPRE_StructLGMRESSetPrecond(solver%solver, solver%precond_id, solver%precond, ierr)
 
-      call HYPRE_StructLGMRESSetLogging(solver%solver, 2, ierr)
-      call HYPRE_StructLGMRESSetPrintLevel(solver%solver, 0, ierr)
+      call HYPRE_StructLGMRESSetLogging(solver%solver, hypre_logging, ierr)
+      call HYPRE_StructLGMRESSetPrintLevel(solver%solver, hypre_logging, ierr)
       call HYPRE_StructLGMRESSetup(solver%solver, matrixA, vectorB, vectorX, ierr)
 
     else
@@ -500,8 +535,8 @@ contains
   end subroutine
 
   subroutine solve_hypre(solver, p, converged)
-    use modmpi, only : myid
-    use modglobal, only : i1, j1, ih, jh, imax, jmax, kmax
+    use modmpi, only : myid, myidx, myidy
+    use modglobal, only : i1, j1, ih, jh, imax, jmax, kmax, rk3step
 
     implicit none
 
@@ -524,6 +559,14 @@ contains
         enddo
       enddo
 
+      ! special point anchoring P
+      ! note should match the special point in the matrix
+      if (k == kmax-10 .and. myidx == 0 .and. myidy == 0) then
+         i = imax/2
+         j = jmax/2
+         values(i+1,j+1) = 0  ! values indexed from 1 here
+      end if
+
       ilower(3) = k - 1
       iupper(3) = k - 1
       call HYPRE_StructVectorSetBoxValues(vectorB, ilower, iupper, values, ierr)
@@ -532,6 +575,14 @@ contains
 
     ! use current values (ie. the solution to the previous call) as starting point
 
+    ! ...except in the beginning of a full RK step
+    !if(rk3step == 1) then
+    !   if (myid == 0) then
+    !      write(*,*) "Poisson solver: initial guess 0"
+    !   end if
+    !   call set_zero_guess()
+    !end if
+    
     !-----------------------------------------------------------------------
     !     2. Call a solver
     !-----------------------------------------------------------------------

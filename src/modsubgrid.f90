@@ -36,16 +36,18 @@ save
 
 contains
   subroutine initsubgrid
-    use modglobal, only : ih,i1,jh,j1,k1,delta,deltai,dx,dy,zf,dzf,fkar,pi
+    use modglobal, only : ih,i1,jh,j1,k1,delta,deltai,dx,dy,zf,dzf,fkar,pi,cexpnr,ifinput
     use mpi
-    use modmpi, only : myid
+    use modmpi, only : myid,comm3d,MY_REAL,mpierr
 
     implicit none
 
     integer   :: k
+    real, allocatable :: height(:)
 
     real :: ceps
     real :: mlen
+    character(80) chmess
 
     call subgridnamelist
 
@@ -84,6 +86,27 @@ contains
         delta(k) = dzf(k)
         deltai(k)= 1./dzf(k)
       end do
+    endif
+
+    if(ldeltainp) then ! Read delta from input file
+      allocate(height(k1))
+      if (myid==0) then
+        open (ifinput,file='delta.inp.'//cexpnr)
+        read (ifinput,'(a80)') chmess
+        write(*,     '(a80)') chmess
+        read (ifinput,'(a80)') chmess
+        do k = 1,k1
+          read (ifinput,*) height (k), delta(k)
+          deltai(k) = 1./delta(k)
+        enddo
+        close(ifinput)
+        write(*,*) 'height    delta'
+        do k=k1,1,-1
+          write (*,'(f7.1,f8.1)') height (k), delta(k)
+        end do
+      endif
+      call MPI_BCAST(delta,k1,MY_REAL   ,0,comm3d,mpierr)
+      deallocate(height)
     endif
 
     if(lmason) then
@@ -133,7 +156,7 @@ contains
     integer :: ierr
 
     namelist/NAMSUBGRID/ &
-        ldelta,lmason,ldeltaz,cf,cn,Rigc,Prandtl,lsmagorinsky,cs,nmason,sgs_surface_fix,ch1,lanisotrop
+        ldelta,lmason,ldeltaz,ldeltainp,cf,cn,Rigc,Prandtl,lsmagorinsky,cs,nmason,sgs_surface_fix,ch1,lanisotrop
 
     if(myid==0)then
       open(ifnamopt,file=fname_options,status='old',iostat=ierr)
@@ -144,11 +167,13 @@ contains
 
       if (lmason .and. .not. ldelta) stop "lmason = .true. requires ldelta = .true."
       if (lmason .and. lanisotrop) stop "lmason = .true. is not compatible with lanisotropic = .true."
+      if (ldeltainp .and. lanisotrop) stop "ldeltainp = .true. is not compatible with lanisotropic = .true."
     end if
 
     call MPI_BCAST(ldelta     ,1,MPI_LOGICAL,0,comm3d,mpierr)
     call MPI_BCAST(lmason     ,1,MPI_LOGICAL,0,comm3d,mpierr)
     call MPI_BCAST(ldeltaz    ,1,MPI_LOGICAL,0,comm3d,mpierr)
+    call MPI_BCAST(ldeltainp  ,1,MPI_LOGICAL,0,comm3d,mpierr)
     call MPI_BCAST(nmason     ,1,MY_REAL    ,0,comm3d,mpierr)
     call MPI_BCAST(lsmagorinsky,1,MPI_LOGICAL,0,comm3d,mpierr)
     call MPI_BCAST(lanisotrop,1,MPI_LOGICAL,0,comm3d,mpierr)
@@ -330,7 +355,7 @@ contains
           do j=2,j1
              do i=2,i1
                 zlt(i,j,k) = delta(k)
-                
+
                 ekm(i,j,k) = cm * zlt(i,j,k) * e120(i,j,k)
                 ekh(i,j,k) = ch * ekm(i,j,k)
 
@@ -344,11 +369,11 @@ contains
           do j=2,j1
              do i=2,i1
                 zlt(i,j,k) = delta(k)
-                zlt(i,j,k) = (1. / zlt(i,j,k) ** nmason + 1. / ( fkar * (zf(k) + z0m(i,j)))**nmason) ** (-1./nmason)                
-                
+                zlt(i,j,k) = (1. / zlt(i,j,k) ** nmason + 1. / ( fkar * (zf(k) + z0m(i,j)))**nmason) ** (-1./nmason)
+
                 ekm(i,j,k) = cm * zlt(i,j,k) * e120(i,j,k)
                 ekh(i,j,k) = ch * ekm(i,j,k)
-                            
+
                 ekm(i,j,k) = max(ekm(i,j,k),ekmin)
                 ekh(i,j,k) = max(ekh(i,j,k),ekmin)
              end do
@@ -359,10 +384,10 @@ contains
           do j=2,j1
              do i=2,i1
                 zlt(i,j,k) = dzf(k)
-                
+
                 ekm(i,j,k) = cm * zlt(i,j,k) * e120(i,j,k)
                 ekh(i,j,k) = ch * ekm(i,j,k)
-                
+
                 ekm(i,j,k) = max(ekm(i,j,k),ekmin)
                 ekh(i,j,k) = max(ekh(i,j,k),ekmin)
              end do
@@ -378,18 +403,18 @@ contains
                 !if (dthvdz(i,j,k) > 0) then
                 !zlt(i,j,k) = min(delta(k),cn*e120(i,j,k)/sqrt(grav/thvf(k)*abs(dthvdz(i,j,k))))
                 !end if
-                
+
                 ! alternative without if
-                zlt(i,j,k) = min(delta(k), &                                                     
-                     cn*e120(i,j,k) / sqrt( grav/thvf(k) * abs(dthvdz(i,j,k))) + &               
-                     delta(k) * (1.0-sign(1.0,dthvdz(i,j,k))))                           
-                ! the final line is 0 if dthvdz(i,j,k) > 0, else 2*delta(k)                        
-                ! ensuring that zlt(i,j,k) = delta(k) when dthvdz < 0, as                        
-                ! in the original scheme.            
-                
+                zlt(i,j,k) = min(delta(k), &
+                     cn*e120(i,j,k) / sqrt( grav/thvf(k) * abs(dthvdz(i,j,k))) + &
+                     delta(k) * (1.0-sign(1.0,dthvdz(i,j,k))))
+                ! the final line is 0 if dthvdz(i,j,k) > 0, else 2*delta(k)
+                ! ensuring that zlt(i,j,k) = delta(k) when dthvdz < 0, as
+                ! in the original scheme.
+
                 ekm(i,j,k) = cm * zlt(i,j,k) * e120(i,j,k)
                 ekh(i,j,k) = (ch1 + ch2 * zlt(i,j,k)*deltai(k)) * ekm(i,j,k)
-                
+
                 ekm(i,j,k) = max(ekm(i,j,k),ekmin)
                 ekh(i,j,k) = max(ekh(i,j,k),ekmin)
              end do

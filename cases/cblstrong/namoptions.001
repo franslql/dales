@@ -53,6 +53,12 @@ iadv_thl    =  5
 iadv_qt     =  5
 iadv_sv     =  5
 /
+&NAMSUBGRID
+ldelta = .true.
+lmason = .true.
+nmason = 1
+ldeltainp = .true.
+/
 &NAMCHECKSIM
 tcheck      = 60
 /

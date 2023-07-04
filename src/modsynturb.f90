@@ -109,8 +109,8 @@ contains
         end do
         do ib = 1,5
           if(.not.lboundary(ib)) cycle
-          allocate(boundary(ib)%eigvec(boundary(ib)%nx1patch,boundary(ib)%nx2patch,3,3), &
-                 & boundary(ib)%ci(boundary(ib)%nx1patch,boundary(ib)%nx2patch,3))!, &
+          allocate(boundary(ib)%eigvec(boundary(ib)%nx1turb,boundary(ib)%nx2turb,3,3), &
+                 & boundary(ib)%ci(boundary(ib)%nx1turb,boundary(ib)%nx2turb,3))!, &
                  ! & boundary(ib)%randthl(boundary(ib)%nx1,boundary(ib)%nx2), &
                  ! & boundary(ib)%randqt(boundary(ib)%nx1,boundary(ib)%nx2))
         end do
@@ -380,8 +380,8 @@ contains
       itm = 1; itp = 1; fp  = 1.; fm  = 1.
     endif
     ! Calculate eigenvalues and eigenvectors for each patch
-    do i = 1,boundary(ib)%nx1patch
-      do j = 1,boundary(ib)%nx2patch
+    do i = 1,boundary(ib)%nx1turb
+      do j = 1,boundary(ib)%nx2turb
         r(1,1) = fp*boundary(ib)%u2(i,j,itp)+fm*boundary(ib)%u2(i,j,itm)
         r(2,2) = fp*boundary(ib)%v2(i,j,itp)+fm*boundary(ib)%v2(i,j,itm)
         r(3,3) = fp*boundary(ib)%w2(i,j,itp)+fm*boundary(ib)%w2(i,j,itm)

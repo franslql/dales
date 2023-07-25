@@ -24,6 +24,7 @@
 module modmeancrosssection
 use netcdf
 use modglobal, only : longint
+use modprecision, only : field_r
 implicit none
 private
 PUBLIC :: initmeancrosssection, exitmeancrosssection, meancrosssection
@@ -34,7 +35,7 @@ integer(kind=longint) :: idtav,itimeav,tnext,tnextwrite
 integer :: ntime,nsamples
 integer, dimension(5) :: dimid
 integer :: ncidxz, ncidyz, varid
-real, allocatable, dimension(:,:) :: usum,vsum,wsum,thlsum,qtsum,u2sum,v2sum,w2sum,&
+real(field_r), allocatable, dimension(:,:) :: usum,vsum,wsum,thlsum,qtsum,u2sum,v2sum,w2sum,&
   thl2sum,qt2sum,uwsum,vwsum,thlwsum,qtwsum,uxz,vxz,wxz,thlxz,qtxz,u2xz,v2xz,w2xz,&
   thl2xz,qt2xz,uwxz,vwxz,thlwxz,qtwxz,uxz_int,vxz_int,wxz_int,thlxz_int,qtxz_int,&
   u2xz_int,v2xz_int,w2xz_int,thl2xz_int,qt2xz_int,uwxz_int,vwxz_int,thlwxz_int,qtwxz_int,&
@@ -45,7 +46,7 @@ contains
     use modstat_nc, only : nc_fillvalue
     use modglobal, only : imax,i1,i2,kmax,k1,lboundary,lopenbc,dtav_glob,timeav_glob,&
       btime,dt_lim,zf,zh,cexpnr,fname_options,dx,dy,ifnamopt,tres,checknamelisterror
-    use modmpi, only : myid,cmyidx,cmyidy,comm3d,mpierr,MPI_LOGICAL,MY_REAL,myidx,myidy
+    use modmpi, only : myid,cmyidx,cmyidy,comm3d,mpierr,myidx,myidy,D_MPI_BCAST
     implicit none
     integer :: ierr,i
     namelist/NAMMEANCROSSSECTION/ &
@@ -61,9 +62,9 @@ contains
       close(ifnamopt)
     end if
 
-    call MPI_BCAST(timeav     ,1,MY_REAL    ,0,comm3d,mpierr)
-    call MPI_BCAST(dtav       ,1,MY_REAL    ,0,comm3d,mpierr)
-    call MPI_BCAST(lmeancross ,1,MPI_LOGICAL,0,comm3d,mpierr)
+    call D_MPI_BCAST(timeav     ,1,0,comm3d,mpierr)
+    call D_MPI_BCAST(dtav       ,1,0,comm3d,mpierr)
+    call D_MPI_BCAST(lmeancross ,1,0,comm3d,mpierr)
 
     if(.not.lmeancross) return
     idtav = dtav/tres
@@ -99,7 +100,9 @@ contains
       fnamexz(13:15) = cmyidx
       fnamexz(17:19) = cexpnr
       ! Create netcdf file
+      print *, 'create netcdf'
       call check( nf90_create(fnamexz, NF90_NETCDF4, ncidxz) )
+      print *, 'created netcdf'
       ! Specify dimensions
       call check( nf90_def_dim(ncidxz, 'time', NF90_UNLIMITED, dimid(1)) )
       call check( nf90_def_dim(ncidxz, 'zt', kmax, dimid(2)) )
@@ -259,10 +262,9 @@ contains
   end subroutine meancrosssection
 
   subroutine reducey
-    use mpi
     use modfields, only : um,vm,wm,thlm,qtm
     use modglobal, only : imax,jmax,kmax,i1,k1,i2,j2,lopenbc,lboundary,j1,dzh,dzf
-    use modmpi, only : commcol,myidy,MY_REAL,mpierr,nprocy
+    use modmpi, only : myidy,nprocy,D_MPI_REDUCE,commcol,mpierr,MPI_SUM
     implicit none
     integer :: i,j,k
     ! Set initial sums to 0
@@ -320,20 +322,20 @@ contains
       end do
     endif
     ! Sum over processies in y direction
-    call mpi_reduce(usum,usum_glob,i1*k1,MY_REAL,MPI_SUM,0,commcol,mpierr)
-    call mpi_reduce(vsum,vsum_glob,imax*k1,MY_REAL,MPI_SUM,0,commcol,mpierr)
-    call mpi_reduce(wsum,wsum_glob,i2*k1,MY_REAL,MPI_SUM,0,commcol,mpierr)
-    call mpi_reduce(thlsum,thlsum_glob,imax*k1,MY_REAL,MPI_SUM,0,commcol,mpierr)
-    call mpi_reduce(qtsum,qtsum_glob,imax*k1,MY_REAL,MPI_SUM,0,commcol,mpierr)
-    call mpi_reduce(u2sum,u2sum_glob,i1*k1,MY_REAL,MPI_SUM,0,commcol,mpierr)
-    call mpi_reduce(v2sum,v2sum_glob,imax*k1,MY_REAL,MPI_SUM,0,commcol,mpierr)
-    call mpi_reduce(w2sum,w2sum_glob,imax*k1,MY_REAL,MPI_SUM,0,commcol,mpierr)
-    call mpi_reduce(thl2sum,thl2sum_glob,imax*k1,MY_REAL,MPI_SUM,0,commcol,mpierr)
-    call mpi_reduce(qt2sum,qt2sum_glob,imax*k1,MY_REAL,MPI_SUM,0,commcol,mpierr)
-    call mpi_reduce(uwsum,uwsum_glob,i1*k1,MY_REAL,MPI_SUM,0,commcol,mpierr)
-    call mpi_reduce(vwsum,vwsum_glob,imax*k1,MY_REAL,MPI_SUM,0,commcol,mpierr)
-    call mpi_reduce(thlwsum,thlwsum_glob,imax*k1,MY_REAL,MPI_SUM,0,commcol,mpierr)
-    call mpi_reduce(qtwsum,qtwsum_glob,imax*k1,MY_REAL,MPI_SUM,0,commcol,mpierr)
+    call D_MPI_REDUCE(usum,usum_glob,i1*k1,MPI_SUM,0,commcol,mpierr)
+    call D_MPI_REDUCE(vsum,vsum_glob,imax*k1,MPI_SUM,0,commcol,mpierr)
+    call D_MPI_REDUCE(wsum,wsum_glob,i2*k1,MPI_SUM,0,commcol,mpierr)
+    call D_MPI_REDUCE(thlsum,thlsum_glob,imax*k1,MPI_SUM,0,commcol,mpierr)
+    call D_MPI_REDUCE(qtsum,qtsum_glob,imax*k1,MPI_SUM,0,commcol,mpierr)
+    call D_MPI_REDUCE(u2sum,u2sum_glob,i1*k1,MPI_SUM,0,commcol,mpierr)
+    call D_MPI_REDUCE(v2sum,v2sum_glob,imax*k1,MPI_SUM,0,commcol,mpierr)
+    call D_MPI_REDUCE(w2sum,w2sum_glob,imax*k1,MPI_SUM,0,commcol,mpierr)
+    call D_MPI_REDUCE(thl2sum,thl2sum_glob,imax*k1,MPI_SUM,0,commcol,mpierr)
+    call D_MPI_REDUCE(qt2sum,qt2sum_glob,imax*k1,MPI_SUM,0,commcol,mpierr)
+    call D_MPI_REDUCE(uwsum,uwsum_glob,i1*k1,MPI_SUM,0,commcol,mpierr)
+    call D_MPI_REDUCE(vwsum,vwsum_glob,imax*k1,MPI_SUM,0,commcol,mpierr)
+    call D_MPI_REDUCE(thlwsum,thlwsum_glob,imax*k1,MPI_SUM,0,commcol,mpierr)
+    call D_MPI_REDUCE(qtwsum,qtwsum_glob,imax*k1,MPI_SUM,0,commcol,mpierr)
     if(myidy==0) then
       ! Calculate variables
       uxz    = usum_glob(2:i1+merge(1,0,lopenbc.and.lboundary(2)),1:kmax)/(jmax*nprocy)

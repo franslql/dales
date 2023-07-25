@@ -11,7 +11,7 @@ randthl    =  0.1
 randqt     =  0.
 randu      =  0.
 nsv        =  0
-nprocx     =  8
+nprocx     =  4
 nprocy     =  2
 /
 
@@ -120,11 +120,6 @@ ltend = .false.
 /
 &SOLVER
 solver_id = 0
-!precond_id = 1
-!n_pre = 1
-!n_post = 1
-!tolerance = 1e-4
-!maxiter   = 40
 /
 &NAMNETCDFSTATS
 lsync = .false.

@@ -5,7 +5,8 @@ from netCDF4 import Dataset
 
 # Input
 pathCases = "../cases/"
-sigmaX_array = np.array([0,2,4,8,16])
+pathWrite = "../input/boundary_input/"
+sigmaX_array = np.array([2])
 sigmaT_array = np.array([0])
 runtime = 21600
 pathPeriodic = f"{pathCases}periodic/"
@@ -88,7 +89,6 @@ for sigmaX in sigmaX_array:
         sigmaY = sigmaX
         sigmaZ = 0
         experiment = f"x{sigmaX:03}y{sigmaY:03}z{sigmaZ:03}t{sigmaT:03}"
-        pathWrite = f"{pathCases}openBC/{experiment}/"
         print(f"Start creating input for experiment {experiment}")
         # Downscale spatiotemporal data using a gaussian smoother
         thlxz_filt = sp.gaussian_filter(thlxz,[sigmaT,sigmaZ,sigmaX],order=0,mode=['nearest','nearest','wrap'])
@@ -119,7 +119,7 @@ for sigmaX in sigmaX_array:
         wxz_filt[:,0,:] = 0.
 
         # Create openboundaries.inp.iexnpr.nc
-        openBC=DALES.OpenBoundariesInp(grid,iexpnr=1, path=pathWrite)
+        openBC=DALES.OpenBoundariesInp(grid,iexpnr=experiment, path=pathWrite)
         # Write initial fields to file
         openBC.writeTime(0.,0)
         openBC.writeWest(thl0[:,None]*np.ones((ktot,jtot)),

@@ -103,7 +103,10 @@ class OpenBoundariesInp:
     def __init__(self, grid, iexpnr=0, path='', nsv=0):
         self.iexpnr = iexpnr
         self.path = path
-        self.name = f"openboundaries.inp.{iexpnr:03}.nc"
+        if(isinstance(iexpnr, str)):
+            self.name = f"openboundaries.inp.{iexpnr}.nc"
+        else:
+            self.name = f"openboundaries.inp.{iexpnr:03}.nc"
         self.nc = Dataset(self.path+self.name,'w')
         self.nc.createDimension('time',None)
         self.nc.createDimension('zt',grid.ktot)

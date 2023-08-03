@@ -2,9 +2,11 @@
 # Create folders for simulations and copy initial profiles
 sigmax_array=( 000 002 004 008 016 )
 sigmat_array=( 000 006 030 180 )
-pathSim="../cases/openBC_synturb/"
-pathPer="../cases/periodic/"
-mkdir $pathSim
+pathInput="../input/"
+pathCases="../cases/"
+pathOpenBC_synturb="${pathCases}openBC_synturb/"
+mkdir $pathCases
+mkdir $pathOpenBC_synturb
 for sigmat in ${sigmat_array[@]}; do
 	for sigmax in ${sigmax_array[@]}; do
 		experiment="x${sigmax}y${sigmax}z000t${sigmat}"
@@ -13,9 +15,10 @@ for sigmat in ${sigmat_array[@]}; do
       continue
     fi
 		# create simulation directory
-		mkdir "${pathSim}${experiment}"
-		cp "${pathPer}prof.inp.000" "${pathSim}${experiment}/prof.inp.001"
-		cp "${pathPer}lscale.inp.000" "${pathSim}${experiment}/lscale.inp.001"
-		cp "namoptions.openBC_synturb" "${pathSim}${experiment}/namoptions" 
+		mkdir "${pathOpenBC_synturb}${experiment}"
+		cp "${pathInput}profiles/prof.inp.xxx" "${pathOpenBC_synturb}${experiment}/prof.inp.001"
+		cp "${pathInput}profiles/lscale.inp.xxx" "${pathOpenBC_synturb}${experiment}/lscale.inp.001"
+		cp "${pathInput}namoptions/namoptions.openBC_synturb" "${pathOpenBC_synturb}${experiment}/namoptions"
+		ln -s "${pathInput}boundary_input/openboundaries.inp.${experiment}.nc" "${pathOpenBC_synturb}${experiment}/openboundaries.inp.001.nc"
 	done
 done

@@ -1,8 +1,10 @@
 #!/bin/bash
 sigmax_array=( 000 002 004 008 016 )
 sigmat_array=( 000 006 030 180 )
-pathSim="../cases/openBC_synturb/"
-cd $pathSim
+pathScripts=$(pwd)
+pathCases="../cases/"
+pathOpenBC_synturb="${pathCases}openBC_synturb/"
+cd $pathOpenBC_synturb
 for sigmat in ${sigmat_array[@]}; do
 	for sigmax in ${sigmax_array[@]}; do
 		experiment="x${sigmax}y${sigmax}z000t${sigmat}"
@@ -11,8 +13,6 @@ for sigmat in ${sigmat_array[@]}; do
       continue
     fi
     cd $experiment
-    ln -s ../../../build/src/dales4.4 .
-    ln -s ../../../scripts/merge.sh .
     mpirun -np 8 ./dales4.4 2>&1 | tee output_sim.txt
     ./merge.sh 2>&1 | tee output_merge.txt 
     rm initd* 
@@ -26,4 +26,4 @@ for sigmat in ${sigmat_array[@]}; do
     cd ..
   done
 done
-cd ../../scripts/
+cd $pathScripts

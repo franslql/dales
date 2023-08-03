@@ -13,8 +13,8 @@ for sigmat in ${sigmat_array[@]}; do
 		experiment="x${sigmax}y${sigmax}z000t${sigmat}"
 		# create simulation directory
 		mkdir -p "${pathOpenBC}${experiment}"
-		cp "${pathInput}profiles/prof.inp.xxx" "${pathOpenBC}${experiment}/prof.inp.001"
-		cp "${pathInput}profiles/lscale.inp.xxx" "${pathOpenBC}${experiment}/lscale.inp.001"
+		cp "${pathInput}initial_profiles/prof.inp.xxx" "${pathOpenBC}${experiment}/prof.inp.001"
+		cp "${pathInput}initial_profiles/lscale.inp.xxx" "${pathOpenBC}${experiment}/lscale.inp.001"
 		cp "${pathInput}namoptions/namoptions.openBC" "${pathOpenBC}${experiment}/namoptions"
 		ln -s "${pathInput}boundary_input/openboundaries.inp.${experiment}.nc" "${pathOpenBC}${experiment}/openboundaries.inp.001.nc"
 		ln -s "${pathDALES}dales4.4" "${pathOpenBC}${experiment}/."

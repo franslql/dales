@@ -2,12 +2,11 @@
 # Create folders for simulations and copy initial profiles
 sigmax_array=( 000 002 004 008 016 )
 sigmat_array=( 000 006 030 180 )
-pathDALES="../build/src/"
-pathInput="../input/"
 pathCases="../cases/"
 pathOpenBC_synturb="${pathCases}openBC_synturb/"
 mkdir -p $pathCases
 mkdir -p $pathOpenBC_synturb
+cd $pathOpenBC_synturb
 for sigmat in ${sigmat_array[@]}; do
 	for sigmax in ${sigmax_array[@]}; do
 		experiment="x${sigmax}y${sigmax}z000t${sigmat}"
@@ -17,11 +16,17 @@ for sigmat in ${sigmat_array[@]}; do
     fi
 		# create simulation directory
 		mkdir -p "${pathOpenBC_synturb}${experiment}"
-		cp "${pathInput}initial_profiles/prof.inp.xxx" "${pathOpenBC_synturb}${experiment}/prof.inp.001"
-		cp "${pathInput}initial_profiles/lscale.inp.xxx" "${pathOpenBC_synturb}${experiment}/lscale.inp.001"
-		cp "${pathInput}namoptions/namoptions.openBC_synturb" "${pathOpenBC_synturb}${experiment}/namoptions"
-		ln -s "${pathInput}boundary_input/openboundaries.inp.${experiment}.nc" "${pathOpenBC_synturb}${experiment}/openboundaries.inp.001.nc"
-		ln -s "${pathDALES}dales4.4" "${pathOpenBC_synturb}${experiment}/."
-		ln -s merge.sh "${pathOpenBC_synturb}${experiment}/." 
+		cd $experiment
+		rm -f dales4.4
+		rm -f merge.sh
+		rm -f openboundaries.inp.001.nc
+		cp ../../../input/initial_profiles/prof.inp.xxx prof.inp.001
+		cp ../../../input/initial_profiles/lscale.inp.xxx lscale.inp.001
+		cp ../../../input/namoptions/namoptions.openBC_synturb namoptions
+		ln -s "../../../input/boundary_input/openboundaries.inp.${experiment}.nc" openboundaries.inp.001.nc
+		ln -s ../../../build/src/dales4.4 .
+		ln -s ../../../scripts/merge.sh .
+		cd ..
 	done
 done
+cd ../../scripts/

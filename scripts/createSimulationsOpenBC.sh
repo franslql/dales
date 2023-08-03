@@ -6,13 +6,13 @@ pathDALES="../build/src/"
 pathInput="../input/"
 pathCases="../cases/"
 pathOpenBC="${pathCases}openBC/"
-mkdir $pathCases
-mkdir $pathOpenBC
+mkdir -p $pathCases
+mkdir -p $pathOpenBC
 for sigmat in ${sigmat_array[@]}; do
 	for sigmax in ${sigmax_array[@]}; do
 		experiment="x${sigmax}y${sigmax}z000t${sigmat}"
 		# create simulation directory
-		mkdir "${pathOpenBC}${experiment}"
+		mkdir -p "${pathOpenBC}${experiment}"
 		cp "${pathInput}profiles/prof.inp.xxx" "${pathOpenBC}${experiment}/prof.inp.001"
 		cp "${pathInput}profiles/lscale.inp.xxx" "${pathOpenBC}${experiment}/lscale.inp.001"
 		cp "${pathInput}namoptions/namoptions.openBC" "${pathOpenBC}${experiment}/namoptions"

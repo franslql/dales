@@ -2,7 +2,7 @@ import numpy as np
 import scipy.ndimage as sp
 import funcDALES as DALES
 from netCDF4 import Dataset
-
+import os
 # Input
 pathCases = "../cases/"
 pathWrite = "../input/boundary_input/"
@@ -10,6 +10,9 @@ sigmaX_array = np.array([2])
 sigmaT_array = np.array([0])
 runtime = 21600
 pathPeriodic = f"{pathCases}periodic/"
+# Create write folder if doesn't exist already
+if not os.path.exists(pathWrite):
+   os.makedirs(pathWrite)
 # Read periodic data
 # profile input
 data = np.loadtxt(f"{pathPeriodic}prof.inp.000")

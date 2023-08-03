@@ -1,5 +1,4 @@
 #!/bin/bash
-pathScripts=$(pwd)
 pathCases="../cases/"
 pathPeriodic="${pathCases}periodic/"
 cd $pathPeriodic
@@ -13,5 +12,5 @@ rm meancrossxz.00*
 rm moments.001 
 rm tmser1.001 
 rm tmsurf.001
-cd $pathScripts
+cd ../../scripts/
 

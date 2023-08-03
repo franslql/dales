@@ -6,8 +6,8 @@ pathDALES="../build/src/"
 pathInput="../input/"
 pathCases="../cases/"
 pathOpenBC_synturb="${pathCases}openBC_synturb/"
-mkdir $pathCases
-mkdir $pathOpenBC_synturb
+mkdir -p $pathCases
+mkdir -p $pathOpenBC_synturb
 for sigmat in ${sigmat_array[@]}; do
 	for sigmax in ${sigmax_array[@]}; do
 		experiment="x${sigmax}y${sigmax}z000t${sigmat}"
@@ -16,7 +16,7 @@ for sigmat in ${sigmat_array[@]}; do
       continue
     fi
 		# create simulation directory
-		mkdir "${pathOpenBC_synturb}${experiment}"
+		mkdir -p "${pathOpenBC_synturb}${experiment}"
 		cp "${pathInput}profiles/prof.inp.xxx" "${pathOpenBC_synturb}${experiment}/prof.inp.001"
 		cp "${pathInput}profiles/lscale.inp.xxx" "${pathOpenBC_synturb}${experiment}/lscale.inp.001"
 		cp "${pathInput}namoptions/namoptions.openBC_synturb" "${pathOpenBC_synturb}${experiment}/namoptions"

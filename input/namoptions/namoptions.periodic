@@ -134,6 +134,7 @@ dzint = 99999.
 taum  = 0.
 tauh  = 20.
 pbc   = 3
+lbuoytop = .true.
 lsynturb = .false.
 iturb    = 10
 lambda = 400.

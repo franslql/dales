@@ -6,7 +6,7 @@ import os
 # Input
 pathCases = "../cases/"
 pathWrite = "../input/boundary_input/"
-sigmaX_array = np.array([2])
+sigmaX_array = np.array([0,2])
 sigmaT_array = np.array([0])
 runtime = 21600
 pathPeriodic = f"{pathCases}periodic/"

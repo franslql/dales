@@ -11,7 +11,7 @@ for sigmat in ${sigmat_array[@]}; do
 	for sigmax in ${sigmax_array[@]}; do
 		experiment="x${sigmax}y${sigmax}z000t${sigmat}"
 		# create simulation directory
-		mkdir -p "${pathOpenBC}${experiment}"
+		mkdir -p $experiment
 		cd $experiment
 		rm -f dales4.4
 		rm -f merge.sh

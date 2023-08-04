@@ -15,7 +15,7 @@ for sigmat in ${sigmat_array[@]}; do
       continue
     fi
 		# create simulation directory
-		mkdir -p "${pathOpenBC_synturb}${experiment}"
+		mkdir -p $experiment
 		cd $experiment
 		rm -f dales4.4
 		rm -f merge.sh

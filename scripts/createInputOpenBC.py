@@ -6,8 +6,8 @@ import os
 # Input
 pathCases = "../cases/"
 pathWrite = "../input/boundary_input/"
-sigmaX_array = np.array([0,2])
-sigmaT_array = np.array([0])
+sigmaX_array = np.array([0,2,4,8,16])
+sigmaT_array = np.array([0,6,30,180])
 runtime = 21600
 pathPeriodic = f"{pathCases}periodic/"
 # Create write folder if doesn't exist already

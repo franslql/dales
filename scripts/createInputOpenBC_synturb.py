@@ -4,8 +4,8 @@ import numpy.ma as ma
 
 # Input
 pathInput = '../input/boundary_input/'
-sigmaX_array = np.array([2])
-sigmaT_array = np.array([0])
+sigmaX_array = np.array([0,2,4,8,16])
+sigmaT_array = np.array([0,6,30,180])
 dxint  = 15360
 dyint  = 3840
 # Constants

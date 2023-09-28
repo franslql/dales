@@ -18,7 +18,7 @@ titles=[f"$\\overline{{\\theta}}-\\overline{{\\theta}}_{{per}}$",\
         f"$\\overline{{w'\\theta'}}-\\overline{{w'\\theta'}}_{{per}}$",\
         f"$\\overline{{u'^2}}-\\overline{{u'^2}}_{{per}}$"]
 units=[f"$(K)$", f"$(ms^{{-1}})$", f"$(Kms^{{-1}})$", f"$(m^2s^{{-2}})$"]
-limits = [[-1,1],[-0.5,0.5],[-0.06,0.06],[-0.7,0.7]]
+limits = [[-1,1],[-0.5,0.5],[-0.03,0.03],[-0.7,0.7]]
 legend_dint = [f"$\\Delta x_{{int}},\\Delta y_{{int}} = \\Delta x, \\Delta y$", f"$\\Delta x_{{int}},\\Delta y_{{int}} = 0.5L_x, 0.5L_y$"]
 # Set all fontsizes
 SMALL_SIZE = 14
@@ -75,7 +75,7 @@ for ivar in range(len(vars)):
     time = nc.variables['time'][:]
     it = np.argwhere(time==tplot)[0][0]
     prof = nc.variables[var][it,:]
-    axs[ivar].plot(prof-profPeriodic,z,f"{linestyles[i]}C2",markersize=markersize,linewidth=linewidth,label=f"$\\tau = {tauh}s$")
+    axs[ivar].plot(prof-profPeriodic,z,f"{linestyles[i]}C2",markersize=markersize,linewidth=linewidth,label=f"$\\tau_0 = {tauh}s$")
     nc.close()
   # Open simulation without buoyancy term at top boundary
   nc = Dataset(f"{pathSensitivity}lbuoyoff/profiles.001.nc",'r')

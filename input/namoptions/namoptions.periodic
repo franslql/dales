@@ -81,8 +81,8 @@ timeav      = 60.
 tcheck      = 0
 /
 &NAMSAMPLING
-dtav        = 60
-timeav      = 60.
+dtav        = 1800
+timeav      = 1800.
 lsampcl     = .false.
 lsampco     = .false.
 lsampup     = .false.
@@ -90,7 +90,7 @@ lsampbuup   = .false.
 /
 &NAMTIMESTAT
 ltimestat   = .true.
-dtav        = 60
+dtav        = 1800
 /
 &NAMCROSSSECTION
 lcross      = .true.
@@ -106,8 +106,8 @@ timeav = 1800
 /
 &NAMGENSTAT
 lstat       = .true.
-dtav        = 60
-timeav      = 60
+dtav        = 5
+timeav      = 1800
 /
 &NAMFIELDDUMP
 lfielddump  = .true.

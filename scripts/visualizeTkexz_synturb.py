@@ -96,7 +96,7 @@ axs[len(sigmaX_array)-1,0].text((len(sigmaT_array)/2)*x[-1]/1000+(len(sigmaT_arr
 axs[0,len(sigmaT_array)-1].text(x[-1]/1000*1.3,-(len(sigmaX_array)/2-1)*z[-1]-((len(sigmaX_array)-1)/2)*0.1*z[-1],'z (m)',rotation='vertical',va='center',ha='center')
 cb_ax = fig.add_axes([0.065, 0.15, 0.015, 0.7])
 cbar = fig.colorbar(C, cax=cb_ax,ticks=np.linspace(0,1,5))
-cbar.set_label(f"tke ($m^2 s^{{-2}}$)",size=14)
+cbar.set_label(f"TKE ($m^2 s^{{-2}}$)",size=14)
 cb_ax.yaxis.set_ticks_position('left')
 cb_ax.yaxis.set_label_position('left')
 fig.set_size_inches(16, 9)

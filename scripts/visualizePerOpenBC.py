@@ -211,7 +211,7 @@ axs[1].set_xlabel('x (km)')
 axs[1].text(-0.06*xt[-1]/1000,zt[-1]*1.13,'z (m)',rotation='vertical',va='center',ha='center')
 cb_ax = fig.add_axes([0.92, 0.15, 0.015, 0.7])
 cbar = fig.colorbar(C, cax=cb_ax,ticks=np.linspace(0,1,5))
-cbar.set_label(f"tke ($m^2/s^2$)")
+cbar.set_label(f"TKE ($m^2 s^{{-2}}$)")
 fig.set_size_inches(16, 9)
 fig.savefig(f"../results/periodic_vs_openBC/tkexz.png",
            bbox_inches='tight', dpi=200)

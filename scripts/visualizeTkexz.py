@@ -10,7 +10,6 @@ sigmaZ = 0
 pathCases = "../cases/"
 pathPeriodic   = f"{pathCases}periodic/meancrossxz/"
 pathOpenBC     = f"{pathCases}openBC/"
-pathOpenBC_synturb = f"{pathCases}openBC_synturb/"
 r = 2
 levels_tkexz = np.linspace(0,1,25)
 # Set all fontsizes
@@ -31,7 +30,7 @@ time = time-time[0]+dt; time=time[time<=trun]; Nt = len(time); it=Nt-1
 u2xz_per = nc.variables['u2xz'][it,:,:]
 u2xz_per = np.append(u2xz_per,u2xz_per[:,0,None],axis=1)
 nc.close()
-nc   = Dataset(f"{pathPeriodic}/v2xzmean.000.nc",'r')
+nc   = Dataset(f"{pathPeriodic}v2xzmean.000.nc",'r')
 v2xz_per = nc.variables['v2xz'][it,:,:]
 nc.close()
 nc   = Dataset(f"{pathPeriodic}w2xzmean.000.nc",'r')
@@ -49,10 +48,7 @@ for i in range(len(sigmaX_array)):
     sigmaX = sigmaX_array[i]
     for j in range(len(sigmaT_array)):
         sigmaT = sigmaT_array[j]
-        if(sigmaX == 0 and sigmaT == 0):
-            pathData = f"{pathOpenBC}x{sigmaX:03}y{sigmaX:03}z{sigmaZ:03}t{sigmaT:03}/meancrossxz/"
-        else:
-            pathData = f"{pathOpenBC_synturb}x{sigmaX:03}y{sigmaX:03}z{sigmaZ:03}t{sigmaT:03}/meancrossxz/"
+        pathData = f"{pathOpenBC}x{sigmaX:03}y{sigmaX:03}z{sigmaZ:03}t{sigmaT:03}/meancrossxz/"
         nc = Dataset(f"{pathData}u2xzmean.001.nc", 'r')
         time = nc.variables['time'][:]
         time = time-2*time[0]+time[1]
@@ -101,5 +97,5 @@ cb_ax.yaxis.set_ticks_position('left')
 cb_ax.yaxis.set_label_position('left')
 fig.set_size_inches(16, 9)
 #fig.suptitle(f"time = {np.round(time[it]/3600,1)} hours")
-plt.savefig(f"../results/openBC_synturb/tkexz.png",
+plt.savefig(f"../results/openBC/tkexz.png",
             bbox_inches='tight', dpi=200)

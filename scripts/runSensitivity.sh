@@ -1,5 +1,5 @@
 #!/bin/bash
-tauh_array=( 000 200 )
+tauh_array=( 000 060 )
 pbc_array=( 2 4 )
 dint_array=( 00 05 )
 pathCases="../cases/"

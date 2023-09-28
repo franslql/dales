@@ -1,6 +1,6 @@
 #!/bin/bash
 # Create folders for simulations and copy input files
-tauh_array=( 000 200 )
+tauh_array=( 000 060 )
 pbc_array=( 2 4 )
 dint_array=( 00 05 )
 pathCases="../cases/"

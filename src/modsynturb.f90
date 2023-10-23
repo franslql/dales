@@ -24,22 +24,24 @@
 !
 module modsynturb
 use netcdf
-use modglobal,only: lsynturb,iturb,lboundary,lperiodic,boundary,nmodes,lambda,tau,dxturb,dyturb,itot,jtot,dx,dy,kmax
+use modglobal,only: lsynturb,iturb,iparam_synturb,lboundary,lperiodic,boundary,nmodes,lambda,tau,dxturb,dyturb,itot,jtot,dx,dy,kmax,i1,j1,btime,tres,dt_param,dt_lim
 use RandomNumbers, only : getRandomReal,randomNumberSequence,new_RandomNumberSequence
-use modprecision, only: field_r
+use modprecision, only: field_r,longint
 implicit none
 real, allocatable, dimension(:,:) :: kn,p,q,vturb,wturb,k_thl,k_qt
 real, allocatable, dimension(:) :: omega,omega_thl,omega_qt,p_thl,p_qt,q_thl,q_qt
 real, allocatable, dimension(:) :: xf,xh,yf,yh
-real :: nisqrt,ctot
+real :: nisqrt,ctot,zi
 real, dimension(3) :: lambdasxyz
 integer :: nxturb,nyturb,nzturb
 integer, parameter :: isepsim_mom = 10,isepsim_all=11, isynturb_mom = 0, isynturb_all = 1
+integer, parameter :: iparam_convectiveBL = 1
 integer :: ntturb,itimestep=1
 real, allocatable, dimension(:) :: tturb
 real, allocatable, dimension(:,:,:) :: uturbin,vturbin,wturbin,thlturbin,qtturbin
 character(len = nf90_max_name) :: RecordDimName
 integer :: VARID,STATUS,NCID,mpierr,timeID
+integer(kind=longint) :: idt_param,tnext_param
 ! ! Uncommend for netcdf output turbulent pertubations west boundary
 ! character (80) :: fname = 'turbOut.xxx.xxx.nc'
 ! integer :: ncid
@@ -57,7 +59,7 @@ type(randomNumberSequence) :: noise
 contains
   subroutine initsynturb
     use netcdf
-    use modglobal, only : dx,dy,imax,jmax,i1,j1,zf,lambdas,lambdas_x,lambdas_y,lambdas_z,kmax,k1,cexpnr,lmoist
+    use modglobal, only : dx,dy,imax,jmax,i1,j1,zf,lambdas,lambdas_x,lambdas_y,lambdas_z,kmax,k1,cexpnr,lmoist,timee
     use modmpi, only : myidx, myidy
     implicit none
     integer :: i,j,ib
@@ -70,6 +72,7 @@ contains
         noise = new_RandomNumberSequence(seed = 100)
         nxturb = int(dx/dxturb*real(itot));
         nyturb = int(dy/dyturb*real(jtot));
+        if(iparam_synturb>0 .and. (nxturb>1 .or. nyturb>1)) stop 'Parametrisation only supports dxturb=dx, dyturb=dy'
         nzturb = kmax
         lambdas = merge(lambda,lambdas,lambdas==-1.)
         lambdasxyz = (/merge(lambdas,lambdas_x,lambdas_x==-1.), &
@@ -150,22 +153,27 @@ contains
         if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
         STATUS = NF90_GET_VAR (NCID, VARID, wturbin, start=(/myidy*jmax+1,1,1/), &
           & count=(/jmax,k1,ntturb/))
-	if(iturb==isepsim_all) then
-	  allocate(thlturbin(jmax,kmax,ntturb))
+	      if(iturb==isepsim_all) then
+          allocate(thlturbin(jmax,kmax,ntturb))
           ! Read thl
           STATUS = NF90_INQ_VARID(NCID,'thlturbwest', VARID)
           if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
           STATUS = NF90_GET_VAR (NCID, VARID, thlturbin, start=(/myidy*jmax+1,1,1/), &
-            & count=(/jmax,kmax,ntturb/))
-	  if(lmoist) then
-	    allocate(qtturbin(jmax,kmax,ntturb))
+          & count=(/jmax,kmax,ntturb/))
+          if(lmoist) then
+            allocate(qtturbin(jmax,kmax,ntturb))
             ! qt
             STATUS = NF90_INQ_VARID(NCID,'wturbwest', VARID)
             if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
             STATUS = NF90_GET_VAR (NCID, VARID, wturbin, start=(/myidy*jmax+1,1,1/), &
-              & count=(/jmax,k1,ntturb/))
+            & count=(/jmax,k1,ntturb/))
           endif
         endif
+      endif
+      if(iparam_synturb>0) then
+        idt_param = dt_param/tres
+        tnext_param = idt_param+btime
+        dt_lim = minval((/dt_lim,tnext_param-timee/))
       endif
       ! ! Uncommend for netcdf output turbulent pertubations west boundary
       ! if(lboundary(1)) then
@@ -193,14 +201,10 @@ contains
   end subroutine initsynturb
 
   subroutine handle_err(errcode)
-
-  implicit none
-
-  integer errcode
-
-  write(6,*) 'Error: ', nf90_strerror(errcode)
-  stop 2
-
+    implicit none
+    integer, intent(in) :: errcode
+    write(6,*) 'Error: ', nf90_strerror(errcode)
+    stop 2
   end subroutine handle_err
 
   subroutine exitsynturb
@@ -224,8 +228,8 @@ contains
       elseif(iturb == isepsim_mom .and. lboundary(1)) then
         deallocate(uturbin,vturbin,wturbin)
       elseif(iturb == isepsim_all .and. lboundary(1)) then
-	deallocate(uturbin,vturbin,wturbin,thlturbin)
-	if(lmoist) deallocate(qtturbin)
+	      deallocate(uturbin,vturbin,wturbin,thlturbin)
+	      if(lmoist) deallocate(qtturbin)
       endif
     endif
   end subroutine exitsynturb
@@ -243,6 +247,7 @@ contains
   subroutine synturb()
     implicit none
     if(.not.lsynturb) return
+    call input_parametrisation()
     select case(iturb)
     case(isynturb_mom)
       call synturb_mom()
@@ -252,6 +257,84 @@ contains
       call sepsim
     end select
   end subroutine synturb
+
+  subroutine input_parametrisation()
+    use modglobal, only : ijtot,grav,zf,timee
+    use modfields, only : u0,v0
+    use modsurfdata, only : ustar,thlflux
+    use modmpi,     only : mpi_sum,mpi_max,mpi_min,comm3d,mpierr, D_MPI_ALLREDUCE
+    implicit none
+    real :: ustl, ust, vstl, vst, wst, Tst, wthlsl, wthls, D12, uw, vw, uv, u2, v2, w2, thl2, wthl, qt2, wqt, uv_min, uv_max,T0=293., theta, zscale=50.
+    integer :: i, j, ib, k
+    if(iparam_synturb==0) return
+    if(timee<tnext_param) then
+      dt_lim = min(dt_lim,tnext_param-timee)
+      return
+    end if
+    tnext_param = tnext_param+idt_param
+    dt_lim = minval((/dt_lim,tnext_param-timee/))
+    select case(iparam_synturb)
+    case(iparam_convectiveBL)
+      ! Calculate boundary layer height (use calcblheight() in modtimestat)
+      call calcblheight_synturb()
+      ! Get mean u- and- vstars and boundary layer height (copied from modtimestat)
+      ustl = 0.
+      vstl = 0.
+      wthlsl = 0.
+      do j = 2,j1
+        do i = 2,i1
+          theta = atan(abs(v0(i,j,1))/abs(u0(i,j,1)))
+          ustl = ustl + ustar(i,j)*cos(theta)
+          vstl = vstl + ustar(i,j)*sin(theta)
+          wthlsl = wthlsl + thlflux(i,j)
+        end do
+      end do
+      call D_MPI_ALLREDUCE(ustl, ust, 1, MPI_SUM, comm3d,mpierr)
+      call D_MPI_ALLREDUCE(vstl, vst, 1, MPI_SUM, comm3d,mpierr)
+      call D_MPI_ALLREDUCE(wthlsl, wthls, 1, MPI_SUM, comm3d,mpierr) 
+      ust = ust/ijtot
+      vst = vst/ijtot
+      wthls = wthls/ijtot
+      wst = (grav/T0*wthls*zi)**(1./3.)
+      Tst = wthls/wst
+      ! Lateral boundaries
+      do k = 1,kmax
+        ! Assume isotropy
+        u2 = merge((wst*(zf(k)/zi)**(1./3.))**2,0.,zf(k)<=zi)
+        v2 = u2
+        w2 = u2
+        uw = merge(ust**2*(1-zf(k)/zi),0.,zf(k)<=zi)
+        vw = merge(vst**2*(1-zf(k)/zi),0.,zf(k)<=zi)
+        ! Get uv by minimal value while u_iv_j is still positive definite
+        D12    = sqrt((uw*vw/u2)**2+u2**2-uw**2-vw**2)
+        uv_min =-D12-uw*vw/u2
+        uv_min = uv_min+0.01*abs(uv_min)
+        uv_max = D12-uw*vw/u2
+        uv_max = uv_max-0.01*abs(uv_max)
+        uv     = min(max(uv_min,0.),uv_max)
+        thl2   = merge((Tst*(zf(k)/zi)**(-1./3.))**2*min(zf(k)/zscale,1.),0.,zf(k)<=zi)
+        wthl   = merge(wthls*(1-1.2*zf(k)/zi),0.,zf(k)<=zi)
+        qt2    = 0.
+        wqt    = 0.
+        do ib = 1,4
+          if(.not.lboundary(ib).or.lperiodic(ib)) cycle
+          boundary(ib)%u2(1,k,1)   = u2
+          boundary(ib)%v2(1,k,1)   = v2
+          boundary(ib)%w2(1,k,1)   = w2
+          boundary(ib)%uw(1,k,1)   = uw
+          boundary(ib)%vw(1,k,1)   = vw
+          boundary(ib)%uv(1,k,1)   = uv
+          boundary(ib)%thl2(1,k,1) = thl2
+          boundary(ib)%wthl(1,k,1) = wthl
+          boundary(ib)%qt2(1,k,1)  = qt2
+          boundary(ib)%wqt(1,k,1)  = wqt
+        end do
+      end do
+      ! Top boundary, leave at 0, below inversion layer height
+    case default
+      stop 'Invalid input parametrisation chosen for synthetic turbulence routine'
+    end select
+  end subroutine input_parametrisation
 
   subroutine synturb_mom()
     use modglobal, only : dx,dy,itot,jtot,zh,zf,imax,jmax,i1,j1,kmax,k1
@@ -341,10 +424,10 @@ contains
         boundary(ib)%uturb = uturbin(:,:,itimestep)
         boundary(ib)%vturb = vturbin(:,:,itimestep)
         boundary(ib)%wturb = wturbin(:,:,itimestep)
-	if(iturb==11) then
-	  boundary(ib)%thlturb = thlturbin(:,:,itimestep)
-	  if(lmoist) boundary(ib)%qtturb = qtturbin(:,:,itimestep)
-	endif
+	      if(iturb==11) then
+	        boundary(ib)%thlturb = thlturbin(:,:,itimestep)
+	        if(lmoist) boundary(ib)%qtturb = qtturbin(:,:,itimestep)
+	      endif
       case(2)
         ! Do nothing (needs to be added)
       case(3)
@@ -358,7 +441,7 @@ contains
   end subroutine sepsim
 
   subroutine calc_eigdec(ib)
-    use modglobal, only : rtimee,tboundary,ntboundary
+    use modglobal, only : rtimee,tboundary,ntboundary_turb
     implicit none
     integer, intent(in) :: ib
     real*8,dimension(3,3) :: r,eigvec
@@ -367,7 +450,7 @@ contains
     real :: fm,fp
     ! Interpolate covariance to current time
     itm = 1
-    if(ntboundary>1) then
+    if(ntboundary_turb>1) then
       do while(rtimee>tboundary(itm))
         itm = itm+1
       end do
@@ -458,7 +541,7 @@ contains
   end subroutine calc_pert
 
   subroutine calc_pert2(ib,x,y,z,nx,ny,nz,uturb,iuturb,thlturb,qtturb)
-    use modglobal, only : rtimee,tboundary,ntboundary
+    use modglobal, only : rtimee,tboundary,ntboundary_turb
     use modmpi, only : myidx,myidy
     implicit none
     real, dimension(:), intent(in) :: x,y,z
@@ -474,7 +557,7 @@ contains
     t = rtimee
     itm = 1
     ! Interpolate covariance to current time
-    if(ntboundary>1) then
+    if(ntboundary_turb>1) then
       do while(t>tboundary(itm))
         itm = itm+1
       end do
@@ -578,6 +661,46 @@ contains
     ! endif
     nullify(pi1,pi2,pi1patch,pi2patch)
   end subroutine calc_pert2
+
+  !>Calculate the boundary layer height copied and adjusted from modtimestat
+!!
+!! There are 3 available ways to calculate the boundary layer height. Only gradient of thv implement here:
+!! - By determining the minimum flux in some scalar, e.g. buoyancy
+!! - By determining the minimum local gradient of some scalar, averaged over a definable number of columns
+!! - By monitoring a threshold value of some scalar, averaged over a definable number of columns
+  subroutine calcblheight_synturb
+    use modglobal,  only : ih,i1,jh,j1,kmax,k1,cp,rlv,imax,rd,zh,dzh,dzf,rv,ijtot
+    use modfields,  only : qt0,ql0,thl0,exnf
+    use modmpi,     only : mpierr, comm3d,mpi_sum, D_MPI_ALLREDUCE
+    implicit none
+    real    :: zil
+    integer :: location,i,j,k,nsamp,stride
+    real, allocatable,dimension(:,:,:) :: blh_fld
+    real, allocatable, dimension(:) :: profile, gradient, dgrad
+    allocate(blh_fld(2-ih:i1+ih,2-jh:j1+jh,k1))
+    allocate(profile(k1),gradient(k1),dgrad(k1))
+    zil = 0.0
+    gradient = 0.0
+    dgrad = 0.0
+    do k=1,k1
+      blh_fld(2:i1,2:j1,k) = (thl0(2:i1,2:j1,k)+rlv*ql0(2:i1,2:j1,k)/(cp*exnf(k))) &
+                  *(1+(rv/rd-1)*qt0(2:i1,2:j1,k)-rv/rd*ql0(2:i1,2:j1,k))
+    end do
+    stride = imax
+    do i=2,stride+1
+      nsamp =  ceiling(real(i1-i+1)/real(stride))
+      do j=2,j1
+        profile  = sum(blh_fld(i:i1:stride,j,:),1)
+        gradient(2:k1) = (profile(2:k1) - profile(1:kmax))/dzh(2:k1)
+        dgrad(2:kmax)    = (gradient(3:k1) - gradient(2:kmax))/dzf(2:kmax)
+        location = maxloc(gradient,1)
+        zil  = zil + nsamp*(zh(location-1) - dzh(location)*dgrad(location-1)/(dgrad(location)-dgrad(location-1) + 1.e-8))
+      enddo
+    enddo
+    call D_MPI_ALLREDUCE(zil, zi, 1, MPI_SUM, comm3d,mpierr)
+    zi = zi / ijtot
+    deallocate(blh_fld,profile,gradient,dgrad)
+  end subroutine calcblheight_synturb
 
   function gaussrand(mu,sigma)
     use modglobal, only : pi,eps1

@@ -271,7 +271,7 @@ contains
   subroutine openboundary_readboundary
     ! Routine reads the boundary input for all time steps
     use modglobal, only : kmax,cexpnr,imax,jmax,itot,jtot,k1,ntboundary, &
-      tboundary,i1,j1,i2,j2,kmax,nsv,iturb
+      tboundary,i1,j1,i2,j2,kmax,nsv,iturb,iparam_synturb,ntboundary_turb
     use modmpi, only : myidx,myidy
     implicit none
     integer :: it,i,j,k,ib
@@ -307,16 +307,27 @@ contains
         allocate(boundary(ib)%sv(boundary(ib)%nx1,boundary(ib)%nx2,ntboundary,nsv))
       endif
       if(lsynturb .and. iturb<10) then ! Allocate turbulent input fields
-        allocate(boundary(ib)%u2(boundary(ib)%nx1turb,boundary(ib)%nx2turb,ntboundary), &
-        & boundary(ib)%v2(boundary(ib)%nx1turb,boundary(ib)%nx2turb,ntboundary), &
-        & boundary(ib)%w2(boundary(ib)%nx1turb,boundary(ib)%nx2turb,ntboundary), &
-        & boundary(ib)%uv(boundary(ib)%nx1turb,boundary(ib)%nx2turb,ntboundary), &
-        & boundary(ib)%uw(boundary(ib)%nx1turb,boundary(ib)%nx2turb,ntboundary), &
-        & boundary(ib)%vw(boundary(ib)%nx1turb,boundary(ib)%nx2turb,ntboundary), &
-        & boundary(ib)%thl2(boundary(ib)%nx1turb,boundary(ib)%nx2turb,ntboundary),&
-        & boundary(ib)%qt2(boundary(ib)%nx1turb,boundary(ib)%nx2turb,ntboundary), &
-        & boundary(ib)%wthl(boundary(ib)%nx1turb,boundary(ib)%nx2turb,ntboundary), &
-        & boundary(ib)%wqt(boundary(ib)%nx1turb,boundary(ib)%nx2turb,ntboundary))
+        ntboundary_turb = merge(ntboundary,1,iparam_synturb==0)
+        allocate(boundary(ib)%u2(boundary(ib)%nx1turb,boundary(ib)%nx2turb,ntboundary_turb), &
+        & boundary(ib)%v2(boundary(ib)%nx1turb,boundary(ib)%nx2turb,ntboundary_turb), &
+        & boundary(ib)%w2(boundary(ib)%nx1turb,boundary(ib)%nx2turb,ntboundary_turb), &
+        & boundary(ib)%uv(boundary(ib)%nx1turb,boundary(ib)%nx2turb,ntboundary_turb), &
+        & boundary(ib)%uw(boundary(ib)%nx1turb,boundary(ib)%nx2turb,ntboundary_turb), &
+        & boundary(ib)%vw(boundary(ib)%nx1turb,boundary(ib)%nx2turb,ntboundary_turb), &
+        & boundary(ib)%thl2(boundary(ib)%nx1turb,boundary(ib)%nx2turb,ntboundary_turb),&
+        & boundary(ib)%qt2(boundary(ib)%nx1turb,boundary(ib)%nx2turb,ntboundary_turb), &
+        & boundary(ib)%wthl(boundary(ib)%nx1turb,boundary(ib)%nx2turb,ntboundary_turb), &
+        & boundary(ib)%wqt(boundary(ib)%nx1turb,boundary(ib)%nx2turb,ntboundary_turb))
+        boundary(ib)%u2 = 0.
+        boundary(ib)%v2 = 0.
+        boundary(ib)%w2 = 0.
+        boundary(ib)%uv = 0.
+        boundary(ib)%uw = 0.
+        boundary(ib)%vw = 0.
+        boundary(ib)%thl2 = 0.
+        boundary(ib)%qt2 = 0.
+        boundary(ib)%wthl = 0.
+        boundary(ib)%wqt = 0.
       endif
       ! Read fields
       select case(ib)
@@ -377,7 +388,7 @@ contains
         endif
       endif
       ! Read input for turbulent pertubations
-      if(lsynturb .and. iturb <10) then
+      if(lsynturb .and. iturb <10 .and. iparam_synturb==0) then
         ! Read u2
         STATUS = NF90_INQ_VARID(NCID, 'u2'//boundary(ib)%name, VARID)
         if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
@@ -750,7 +761,7 @@ contains
     ! of synthetic turbulence at the dirichlet inflow boundaries.
     use modglobal, only : rk3step
     implicit none
-    if(rk3step == 1) call synturb()
+    if(rk3step == 3) call synturb()
   end subroutine openboundary_turb
 
   subroutine applyboundaryf(a,sx,ex,sy,ey,sz,ez,ih,jh,ib,val,nx1,nx2,lmax0,turb,profile)

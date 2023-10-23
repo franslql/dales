@@ -227,8 +227,8 @@ save
       type(boundary_type), dimension(5) :: boundary
       logical, dimension(5) :: lboundary = .false.
       logical, dimension(5) :: lperiodic =  (/.true., .true., .true., .true., .false./)
-      real :: dxint=-1.,dyint=-1.,dzint=-1.,tauh=60.,taum=0.,tau=60.,lambda,lambdas=-1.,lambdas_x=-1.,lambdas_y=-1.,lambdas_z=-1.,dxturb=-1.,dyturb=-1.
-      integer :: nmodes=100,ntboundary=1,pbc = 3,iturb=0
+      real :: dxint=-1.,dyint=-1.,dzint=-1.,tauh=60.,taum=0.,tau=60.,lambda,lambdas=-1.,lambdas_x=-1.,lambdas_y=-1.,lambdas_z=-1.,dxturb=-1.,dyturb=-1.,dt_param=60.
+      integer :: nmodes=100,ntboundary=1,pbc = 3,iturb=0, ntboundary_turb=1,iparam_synturb=0
       real,dimension(:),allocatable :: tboundary
 
       ! modphsgrd.f90

@@ -72,7 +72,7 @@ contains
                                   lnoclouds,lfast_thermo,lrigidlid,unudge,ntimedep,&
                                   solver_id, maxiter, maxiter_precond, tolerance, n_pre, n_post, precond_id, checknamelisterror, &
                                   loutdirs, output_prefix, &
-                                  lopenbc,linithetero,lperiodic,dxint,dyint,dzint,dxturb,dyturb,taum,tauh,pbc,lsynturb,nmodes,tau,lambda,lambdas,lambdas_x,lambdas_y,lambdas_z,iturb, &
+                                  lopenbc,linithetero,lperiodic,dxint,dyint,dzint,dxturb,dyturb,taum,tauh,pbc,lsynturb,nmodes,tau,lambda,lambdas,lambdas_x,lambdas_y,lambdas_z,iturb, iparam_synturb, dt_param, &
                                   hypre_logging,rdt,rk3step,i1,j1,k1,ih,jh,lboundary,lconstexner
     use modforces,         only : lforce_user
     use modsurfdata,       only : z0,ustin,wtsurf,wqsurf,wsvsurf,ps,thls,isurf
@@ -128,7 +128,7 @@ contains
     namelist/SOLVER/ &
         solver_id, maxiter, tolerance, n_pre, n_post, precond_id, maxiter_precond, hypre_logging
     namelist/OPENBC/ &
-        lopenbc,linithetero,lper,lbuoytop,dxint,dyint,dzint,dxturb,dyturb,taum,tauh,pbc,lsynturb,iturb,tau,lambda,nmodes,lambdas,lambdas_x,lambdas_y,lambdas_z,lbuoytop
+        lopenbc,linithetero,lper,lbuoytop,dxint,dyint,dzint,dxturb,dyturb,taum,tauh,pbc,lsynturb,iturb,iparam_synturb,dt_param,tau,lambda,nmodes,lambdas,lambdas_x,lambdas_y,lambdas_z,lbuoytop
 
 
     ! get myid
@@ -313,6 +313,8 @@ contains
     call D_MPI_BCAST(pbc,        1, 0,commwrld,mpierr)
     call D_MPI_BCAST(lsynturb,   1, 0,commwrld,mpierr)
     call D_MPI_BCAST(iturb,      1, 0,commwrld,mpierr)
+    call D_MPI_BCAST(iparam_synturb, 1, 0,commwrld,mpierr)
+    call D_MPI_BCAST(dt_param, 1, 0,commwrld,mpierr)
     call D_MPI_BCAST(lambda,     1, 0,commwrld,mpierr)
     call D_MPI_BCAST(tau,        1, 0,commwrld,mpierr)
     call D_MPI_BCAST(nmodes,     1, 0,commwrld,mpierr)

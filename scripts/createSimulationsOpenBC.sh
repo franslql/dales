@@ -1,9 +1,7 @@
 #!/bin/bash
 # Create folders for simulations and copy initial profiles
-# sigmax_array=( 000 002 004 008 016 )
-# sigmat_array=( 000 006 030 180 )
-sigmax_array=( 000 )
-sigmat_array=( 000 )
+sigmax_array=( 000 002 004 008 016 )
+sigmat_array=( 000 006 030 180 )
 pathCases="../cases/"
 pathOpenBC="${pathCases}openBC/"
 mkdir -p $pathCases

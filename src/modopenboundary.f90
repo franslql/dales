@@ -43,9 +43,9 @@ use modmpi, only : openboundary_excjs
 
 implicit none
 integer :: nxpatch, nypatch, nzpatch, nxturb, nyturb, nzturb
-real, dimension(:,:), allocatable :: uturbtemp,vturbtemp,wturbtemp
-real, dimension(:), allocatable :: rhointi
-real, dimension(:,:,:), allocatable :: thls_hetero,ps_hetero
+real(field_r), dimension(:,:), allocatable :: uturbtemp,vturbtemp,wturbtemp
+real(field_r), dimension(:), allocatable :: rhointi
+real(field_r), dimension(:,:,:), allocatable :: thls_hetero,ps_hetero
 real :: ibuoy = 0.
 logical :: lbuoytop = .false.
 integer :: nx1max,nx2max
@@ -459,8 +459,12 @@ contains
     ! Divergence correction
     if(myid==0) print *, "Start divergence correction boundaries"
     do it = 1,ntboundary
-      do icalc=1,2
+      divnew = 1e9
+      divold = 1e9
+      icalc  = 0
+      do while (.True.)
         ! Calculate divergence
+        divold = divnew
         div = 0.
         if(lboundary(1)) then
           do j = 1,jmax
@@ -498,13 +502,16 @@ contains
           end do
         endif
         call D_MPI_ALLREDUCE(div,sumdiv,1,MPI_SUM,comm3d,mpierr)
-        if(icalc==1) then
-           divold=sumdiv
-         else
-           divnew=sumdiv
-           if(myid==0) print *, 't,input,corrected;',tboundary(it),divold,divnew
-           exit
-         endif
+        divnew = sumdiv
+        if(abs(divnew)<1e-5) then
+          if(myid==0) print *, 't,input,corrected,niter;',tboundary(it),divold,divnew,icalc
+          exit
+        elseif(icalc>20) then
+          if(myid==0) print *, 'Warning, divergence correction did not converge; t,input,corrected,niter;',tboundary(it),divold,divnew,icalc
+          exit
+        endif
+        divold = divnew
+        icalc = icalc+1
         ! Apply correction, spread divergence over lateral boundaries
         if(lboundary(1)) then
           do k = 1,kmax

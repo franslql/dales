@@ -28,6 +28,7 @@
 !
 module modchecksim
   use modglobal, only : longint
+  use modprecision, only : field_r
 
   implicit none
   private
@@ -169,8 +170,8 @@ contains
 
 
 
-    real div, divmax, divtot
-    real divmaxl, divtotl
+    real(field_r) div, divmax, divtot
+    real(field_r) divmaxl, divtotl
     integer i, j, k
 
     divmax = 0.

@@ -115,7 +115,7 @@ contains
 !>Run crosssection.
   subroutine docape
     use modglobal, only : imax,jmax,i1,j1,k1,kmax,nsv,rlv,cp,rv,rd,rk3step,timee,rtimee,dt_lim,grav,eps1,&
-    nsv,ttab,esatltab,esatitab,zf,dzf,tup,tdn,zh,kcb
+    nsv,ttab,esatltab,esatitab,zf,dzf,tup,tdn,zh,kcb,linit_out
     use modfields, only : thl0,qt0,ql0,w0,sv0,exnf,thvf,exnf,presf,rhobf
     use modstat_nc, only : lnetcdf, writestat_nc
     use modgenstat, only : qlmnlast,wthvtmnlast
@@ -136,13 +136,15 @@ contains
     real :: Tnr,Tnr_old,ilratio,tlo,thi,esl1,esi1,qsatur,thlguess,thlguessmin,ttry,qvsl1,qvsi1
 
     if (.not. lcape) return
-    if (rk3step/=3) return
-    if(timee<tnext) then
+    if (rk3step/=3 .and. .not. linit_out) return
+    if(timee<tnext .and. .not. linit_out) then
       dt_lim = min(dt_lim,tnext-timee)
       return
     end if
-    tnext = tnext+idtav
-    dt_lim = minval((/dt_lim,tnext-timee/))
+    if(.not. linit_out) then 
+      tnext = tnext+idtav
+      dt_lim = minval((/dt_lim,tnext-timee/))
+    endif
 
     allocate(dcape(2:i1,2:j1),dscape(2:i1,2:j1),dcin(2:i1,2:j1),dscin(2:i1,2:j1),dcintot(2:i1,2:j1))
     allocate(capemax(2:i1,2:j1),cinmax(2:i1,2:j1),hw2cb(2:i1,2:j1))

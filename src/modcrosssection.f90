@@ -241,19 +241,21 @@ contains
   end subroutine initcrosssection
 !>Run crosssection. Mainly timekeeping
   subroutine crosssection
-    use modglobal, only : rk3step,timee,dt_lim
+    use modglobal, only : rk3step,timee,dt_lim,linit_out
     use modstat_nc, only : writestat_nc
     implicit none
 
 
     if (.not. lcross) return
-    if (rk3step/=3) return
-    if(timee<tnext) then
+    if (rk3step/=3 .and. .not. linit_out) return
+    if(timee<tnext .and. .not. linit_out) then
       dt_lim = min(dt_lim,tnext-timee)
       return
     end if
-    tnext = tnext+idtav
-    dt_lim = minval((/dt_lim,tnext-timee/))
+    if(.not. linit_out) then
+      tnext = tnext+idtav
+      dt_lim = minval((/dt_lim,tnext-timee/))
+    endif
 
     if (lxz) call wrtvert
     if (lxy) call wrthorz

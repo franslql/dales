@@ -191,7 +191,7 @@ contains
     use modfields, only : u0,v0,w0,thl0,qt0,ql0,sv0,thv0h,thvh
     use modsurfdata,only : thls,qts,thvs
     use modglobal, only : imax,i1,ih,jmax,j1,jh,k1,rk3step,&
-                          timee,dt_lim,cexpnr,ifoutput,rtimee
+                          timee,dt_lim,cexpnr,ifoutput,rtimee,linit_out
     use modmpi,    only : myid,cmyidx, cmyidy
     use modstat_nc, only : lnetcdf, writestat_nc
     use modmicrodata, only : iqr, imicro, imicro_none
@@ -205,15 +205,17 @@ contains
 
 
     if (.not. lfielddump) return
-    if (rk3step/=3) return
+    if (rk3step/=3 .and. .not. linit_out) return
 
-    if(timee<tnext) then
+    if(timee<tnext .and. .not. linit_out) then
       dt_lim = min(dt_lim,tnext-timee)
       return
     end if
 
-    tnext = tnext+idtav
-    dt_lim = minval((/dt_lim,tnext-timee/))
+    if(.not. linit_out) then 
+      tnext = tnext+idtav
+      dt_lim = minval((/dt_lim,tnext-timee/))
+    endif
 
     ! Only write fields if time is in the range (tmin, tmax)
     if (timee < itmin .or. timee > itmax) return

@@ -49,14 +49,14 @@ contains
 
 
   subroutine initstat_nc
-    use modglobal, only : ifnamopt,fname_options,checknamelisterror
+    use modglobal, only : ifnamopt,fname_options,checknamelisterror,linit_out
     use modmpi,    only : mpierr,mpi_logical,comm3d,myid,D_MPI_BCAST
     implicit none
 
     integer             :: ierr
 
     namelist/NAMNETCDFSTATS/ &
-    lnetcdf, lsync, lclassic, deflate
+    lnetcdf, lsync, lclassic, deflate, linit_out
 
     if(myid==0)then
       open(ifnamopt,file=fname_options,status='old',iostat=ierr)
@@ -70,6 +70,7 @@ contains
     call D_MPI_BCAST(lsync      ,1, 0,comm3d,mpierr)
     call D_MPI_BCAST(lclassic   ,1, 0,comm3d,mpierr)
     call D_MPI_BCAST(deflate    ,1, 0,comm3d,mpierr)
+    call D_MPI_BCAST(linit_out  ,1, 0,comm3d,mpierr)
     
   end subroutine initstat_nc
 !

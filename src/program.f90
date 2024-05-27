@@ -100,7 +100,7 @@ program DALES
 !!----------------------------------------------------------------
 !!     0.0    USE STATEMENTS FOR CORE MODULES
 !!----------------------------------------------------------------
-  use modglobal,         only : rk3step,timeleft,lopenbc
+  use modglobal,         only : rk3step,timeleft,lopenbc,linit_out
   use modmpi,            only : initmpicomm
   use modstartup,        only : startup, writerestartfiles,testwctime,exitmodules
   use modtimedep,        only : timedep
@@ -207,7 +207,11 @@ program DALES
 !   3.0   MAIN TIME LOOP
 !------------------------------------------------------
   call testwctime
-
+  ! Write initial fields as well
+  call fielddump
+  call crosssection
+  call docape
+  linit_out = .false. 
   do while (timeleft>0 .or. rk3step < 3)
     ! Calculate new timestep, and reset tendencies to 0.
     call tstep_update

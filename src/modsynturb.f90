@@ -34,7 +34,7 @@ real, allocatable, dimension(:) :: xf,xh,yf,yh
 real :: nisqrt,ctot
 real, dimension(3) :: lambdasxyz
 integer :: nxturb,nyturb,nzturb
-integer, parameter :: isepsim_mom = 10,isepsim_all=11, isynturb_mom = 0, isynturb_all = 1
+integer, parameter :: isepsim_mom = 10,isepsim_all=11, isynturb_mom = 0, isynturb_all = 1, isynturb_param=2
 integer :: ntturb,itimestep=1
 real, allocatable, dimension(:) :: tturb
 real, allocatable, dimension(:,:,:) :: uturbin,vturbin,wturbin,thlturbin,qtturbin
@@ -63,7 +63,7 @@ contains
     integer :: i,j,ib
     if(.not.lsynturb) return
     if(any(lboundary.and..not.(lperiodic))) then
-      if(iturb == isynturb_all .or. iturb == isynturb_mom) then
+      if(iturb == isynturb_all .or. iturb == isynturb_mom .or. iturb == isynturb_param) then
         ! Constants
         nisqrt  = sqrt(2./nmodes)
         ctot = lambda/tau
@@ -150,57 +150,53 @@ contains
         if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
         STATUS = NF90_GET_VAR (NCID, VARID, wturbin, start=(/myidy*jmax+1,1,1/), &
           & count=(/jmax,k1,ntturb/))
-	if(iturb==isepsim_all) then
-	  allocate(thlturbin(jmax,kmax,ntturb))
-          ! Read thl
-          STATUS = NF90_INQ_VARID(NCID,'thlturbwest', VARID)
-          if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-          STATUS = NF90_GET_VAR (NCID, VARID, thlturbin, start=(/myidy*jmax+1,1,1/), &
-            & count=(/jmax,kmax,ntturb/))
-	  if(lmoist) then
-	    allocate(qtturbin(jmax,kmax,ntturb))
-            ! qt
-            STATUS = NF90_INQ_VARID(NCID,'wturbwest', VARID)
-            if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
-            STATUS = NF90_GET_VAR (NCID, VARID, wturbin, start=(/myidy*jmax+1,1,1/), &
-              & count=(/jmax,k1,ntturb/))
+        if(iturb==isepsim_all) then
+          allocate(thlturbin(jmax,kmax,ntturb))
+                ! Read thl
+                STATUS = NF90_INQ_VARID(NCID,'thlturbwest', VARID)
+                if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+                STATUS = NF90_GET_VAR (NCID, VARID, thlturbin, start=(/myidy*jmax+1,1,1/), &
+                  & count=(/jmax,kmax,ntturb/))
+          if(lmoist) then
+            allocate(qtturbin(jmax,kmax,ntturb))
+                  ! qt
+                  STATUS = NF90_INQ_VARID(NCID,'wturbwest', VARID)
+                  if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+                  STATUS = NF90_GET_VAR (NCID, VARID, wturbin, start=(/myidy*jmax+1,1,1/), &
+                    & count=(/jmax,k1,ntturb/))
           endif
         endif
       endif
-      ! ! Uncommend for netcdf output turbulent pertubations west boundary
-      ! if(lboundary(1)) then
-      !   write(fname,'(A,i3.3,A,i3.3,A)') 'turbOut.', myidx, '.', myidy, '.nc'
-      !   call check( nf90_create(fname, nf90_clobber, ncid) )
-      !   call check( nf90_def_dim(ncid, z_NAME, kmax, z_dimid) )
-      !   call check( nf90_def_dim(ncid, y_NAME, jmax, y_dimid) )
-      !   call check( nf90_def_dim(ncid, t_NAME, NF90_UNLIMITED, t_dimid) )
-      !   call check( nf90_def_var(ncid, z_NAME, NF90_REAL, z_dimid, z_varid) )
-      !   call check( nf90_def_var(ncid, y_NAME, NF90_REAL, y_dimid, y_varid) )
-      !   call check( nf90_def_var(ncid, t_NAME, NF90_REAL, t_dimid, t_varid) )
-      !   dimids = (/y_dimid, z_dimid, t_dimid/)
-      !   call check( nf90_def_var(ncid, 'u', NF90_REAL, dimids, uturb_varid) )
-      !   call check( nf90_def_var(ncid, 'v', NF90_REAL, dimids, vturb_varid) )
-      !   call check( nf90_def_var(ncid, 'w', NF90_REAL, dimids, wturb_varid) )
-      !   call check( nf90_def_var(ncid, 'thl', NF90_REAL, dimids, thlturb_varid) )
-      !   call check( nf90_def_var(ncid, 'qt', NF90_REAL, dimids, qtturb_varid) )
-      !   call check( nf90_enddef(ncid) )
-      !   call check( nf90_put_var(ncid, z_varid, zf(1:kmax)) )
-      !   call check( nf90_put_var(ncid, y_varid, yf) )
-      !   count = (/ jmax, kmax, 1 /)
-      !   start = (/ 1, 1, 1 /)
-      ! endif
+        ! ! Uncommend for netcdf output turbulent pertubations west boundary
+        ! if(lboundary(1)) then
+        !   write(fname,'(A,i3.3,A,i3.3,A)') 'turbOut.', myidx, '.', myidy, '.nc'
+        !   call check( nf90_create(fname, nf90_clobber, ncid) )
+        !   call check( nf90_def_dim(ncid, z_NAME, kmax, z_dimid) )
+        !   call check( nf90_def_dim(ncid, y_NAME, jmax, y_dimid) )
+        !   call check( nf90_def_dim(ncid, t_NAME, NF90_UNLIMITED, t_dimid) )
+        !   call check( nf90_def_var(ncid, z_NAME, NF90_REAL, z_dimid, z_varid) )
+        !   call check( nf90_def_var(ncid, y_NAME, NF90_REAL, y_dimid, y_varid) )
+        !   call check( nf90_def_var(ncid, t_NAME, NF90_REAL, t_dimid, t_varid) )
+        !   dimids = (/y_dimid, z_dimid, t_dimid/)
+        !   call check( nf90_def_var(ncid, 'u', NF90_REAL, dimids, uturb_varid) )
+        !   call check( nf90_def_var(ncid, 'v', NF90_REAL, dimids, vturb_varid) )
+        !   call check( nf90_def_var(ncid, 'w', NF90_REAL, dimids, wturb_varid) )
+        !   call check( nf90_def_var(ncid, 'thl', NF90_REAL, dimids, thlturb_varid) )
+        !   call check( nf90_def_var(ncid, 'qt', NF90_REAL, dimids, qtturb_varid) )
+        !   call check( nf90_enddef(ncid) )
+        !   call check( nf90_put_var(ncid, z_varid, zf(1:kmax)) )
+        !   call check( nf90_put_var(ncid, y_varid, yf) )
+        !   count = (/ jmax, kmax, 1 /)
+        !   start = (/ 1, 1, 1 /)
+        ! endif
     endif
   end subroutine initsynturb
 
   subroutine handle_err(errcode)
-
-  implicit none
-
-  integer errcode
-
-  write(6,*) 'Error: ', nf90_strerror(errcode)
-  stop 2
-
+    implicit none
+    integer errcode
+    write(6,*) 'Error: ', nf90_strerror(errcode)
+    stop 2
   end subroutine handle_err
 
   subroutine exitsynturb
@@ -211,7 +207,7 @@ contains
     ! ! Uncommend for netcdf output turbulent pertubations
     ! if(lboundary(1)) call check( nf90_close(ncid) )
     if(any(lboundary.and..not.(lperiodic))) then
-      if(iturb == isynturb_mom .or. iturb == isynturb_all) then
+      if(iturb == isynturb_mom .or. iturb == isynturb_all .or. iturb == isynturb_param) then
         do ib = 1,5
           if(.not.lboundary(ib)) cycle
           deallocate(boundary(ib)%u2,boundary(ib)%v2,boundary(ib)%w2,&
@@ -224,8 +220,8 @@ contains
       elseif(iturb == isepsim_mom .and. lboundary(1)) then
         deallocate(uturbin,vturbin,wturbin)
       elseif(iturb == isepsim_all .and. lboundary(1)) then
-	deallocate(uturbin,vturbin,wturbin,thlturbin)
-	if(lmoist) deallocate(qtturbin)
+	      deallocate(uturbin,vturbin,wturbin,thlturbin)
+	      if(lmoist) deallocate(qtturbin)
       endif
     endif
   end subroutine exitsynturb
@@ -241,6 +237,7 @@ contains
   ! end subroutine check
 
   subroutine synturb()
+    use modmpi, only : myid
     implicit none
     if(.not.lsynturb) return
     select case(iturb)
@@ -248,10 +245,86 @@ contains
       call synturb_mom()
     case(isynturb_all)
       call synturb_all()
+    case(isynturb_param)
+      call parametrisation()
+      call synturb_all()
     case(isepsim_mom, isepsim_all)
       call sepsim
     end select
   end subroutine synturb
+
+  subroutine parametrisation()
+    use modglobal, only : ijtot,grav,zf,i1,j1,kmax,zh
+    use modmpi, only : MPI_SUM, comm3d, mpierr, D_MPI_ALLREDUCE,myid
+    use modsurfdata, only : thlflux, ustar
+    use modfields, only : u0av, v0av, thl0av
+    implicit none
+    real :: zi_min=200., zi_max=4000., ustl, wtsurfl, ust, vst, wtsurf, wstar, T0=293., Tstar, horv, zi
+    integer :: k, ib
+    ! Calculate boundary layer height
+    call calc_zi(zi)
+    zi = max(min(zi,zi_max),zi_min)
+    ! Calculate mean surface flux and friction velocity
+    ustl    = sum(ustar  (2:i1,2:j1))
+    wtsurfl = sum(thlflux(2:i1,2:j1))
+
+    call D_MPI_ALLREDUCE(ustl  ,  ust   , 1, MPI_SUM, comm3d,mpierr)
+    call D_MPI_ALLREDUCE(wtsurfl, wtsurf, 1, MPI_SUM, comm3d,mpierr)
+
+    wtsurf = wtsurf / ijtot
+    ust    = ust/ijtot
+
+    horv  = sqrt(u0av(1) ** 2 + v0av(1) ** 2)
+    horv  = max(horv, 0.1)
+
+    vst = -ust*(v0av(1)/horv)
+    ust = -ust*(u0av(1)/horv)
+    
+    ! Calculate temperature and convective velocity scales
+    wstar = (grav/T0*wtsurf*zi)**(1./3.)
+    Tstar =  wtsurf/wstar
+
+    do ib = 1,4
+      if(.not.lboundary(ib).or.lperiodic(ib)) cycle
+      do k = 1,kmax
+        if(zf(k) <= zi) then
+          boundary(ib)%u2(:,k,:) = (0.2*u0av(k))**2
+          boundary(ib)%v2(:,k,:) = (0.2*v0av(k))**2
+          boundary(ib)%w2(:,k,:) =  ((1.-4./(zi**2)*(zh(k)-zi/2.)**2)*wstar)**2 !wstar**2*min(zh(k)/zh(3),1.)
+          boundary(ib)%uv(:,k,:) = 0.
+          boundary(ib)%uw(:,k,:) = ust**2*(1.-zf(k)/zi)
+          boundary(ib)%vw(:,k,:) = vst**2*(1.-zf(k)/zi) 
+          boundary(ib)%thl2(:,k,:) = (Tstar*(zf(k)/zi)**(-1./3.))**2*min(zf(k)/zf(3),1.)
+          boundary(ib)%wthl(:,k,:) = wtsurf*(1.-1.2*zf(k)/zi)
+          boundary(ib)%qt2(:,k,:)  = 0.
+          boundary(ib)%wqt(:,k,:)  = 0.
+        else
+          boundary(ib)%u2(:,k,:) = 0.
+          boundary(ib)%v2(:,k,:) = 0.
+          boundary(ib)%w2(:,k,:) = 0.
+          boundary(ib)%uv(:,k,:) = 0.
+          boundary(ib)%uw(:,k,:) = 0.
+          boundary(ib)%vw(:,k,:) = 0.
+          boundary(ib)%thl2(:,k,:) = 0.
+          boundary(ib)%wthl(:,k,:) = 0.
+          boundary(ib)%qt2(:,k,:)  = 0.
+          boundary(ib)%wqt(:,k,:)  = 0.
+        endif
+      enddo
+    enddo
+    if(lboundary(5)) then
+      boundary(5)%u2(:,:,:) = 0.
+      boundary(5)%v2(:,:,:) = 0.
+      boundary(5)%w2(:,:,:) = 0.
+      boundary(5)%uv(:,:,:) = 0.
+      boundary(5)%uw(:,:,:) = 0.
+      boundary(5)%vw(:,:,:) = 0.
+      boundary(5)%thl2(:,:,:) = 0.
+      boundary(5)%wthl(:,:,:) = 0.
+      boundary(5)%qt2(:,:,:)  = 0.
+      boundary(5)%wqt(:,:,:)  = 0.
+    endif
+  end subroutine
 
   subroutine synturb_mom()
     use modglobal, only : dx,dy,itot,jtot,zh,zf,imax,jmax,i1,j1,kmax,k1
@@ -378,7 +451,7 @@ contains
       fm = (tboundary(itp)-rtimee)/(tboundary(itp)-tboundary(itm))
       fp = (rtimee-tboundary(itm))/(tboundary(itp)-tboundary(itm))
     else
-      itm = 1; itp = 1; fp  = 1.; fm  = 1.
+      itm = 1; itp = 1; fp  = 1.; fm  = 0.
     endif
     ! Calculate eigenvalues and eigenvectors for each patch
     do i = 1,boundary(ib)%nx1turb
@@ -458,7 +531,7 @@ contains
   end subroutine calc_pert
 
   subroutine calc_pert2(ib,x,y,z,nx,ny,nz,uturb,iuturb,thlturb,qtturb)
-    use modglobal, only : rtimee,tboundary,ntboundary
+    use modglobal, only : rtimee,tboundary,ntboundary,eps1
     use modmpi, only : myidx,myidy
     implicit none
     real, dimension(:), intent(in) :: x,y,z
@@ -485,7 +558,7 @@ contains
       fm = (tboundary(itp)-t)/(tboundary(itp)-tboundary(itm))
       fp = (t-tboundary(itm))/(tboundary(itp)-tboundary(itm))
     else
-      itm = 1; itp = 1; fp  = 1.; fm  = 1.
+      itm = 1; itp = 1; fp  = 1.; fm  = 0.
     endif
     select case(ib)
     case(1,2)
@@ -541,13 +614,13 @@ contains
       w2     = fp*boundary(ib)%w2(pi1patch,pi2patch,itp)   + fm*boundary(ib)%w2(pi1patch,pi2patch,itm)
       thl2   = fp*boundary(ib)%thl2(pi1patch,pi2patch,itp) + fm*boundary(ib)%thl2(pi1patch,pi2patch,itm)
       qt2    = fp*boundary(ib)%qt2(pi1patch,pi2patch,itp)  + fm*boundary(ib)%qt2(pi1patch,pi2patch,itm)
-      if(thl2==0. .or. w2==0.) then
+      if(thl2<eps1 .or. w2<eps1) then
         thlturb(pi1,pi2) = thltemp*sqrt(thl2)
       else
         rho = min(max(wthl/sqrt(thl2*w2),-1.),1.)
         thlturb(pi1,pi2) = (rho*wturbf/sqrt(w2) + sqrt(1-rho**2)*thltemp)*sqrt(thl2)
       endif
-      if(qt2==0. .or. w2==0.) then
+      if(qt2<eps1 .or. w2<eps1) then
         qtturb(pi1,pi2)  = qttemp*sqrt(qt2)
       else
         rho = min(max(wqt/sqrt(qt2*w2),-1.),1.)
@@ -578,6 +651,44 @@ contains
     ! endif
     nullify(pi1,pi2,pi1patch,pi2patch)
   end subroutine calc_pert2
+
+  subroutine calc_zi(zi) ! Copied default method (grad) from modtimestat.f90
+    use modglobal,  only : ih,i1,jh,j1,kmax,k1,cp,rlv,imax,rd,zh,dzh,zf,dzf,rv,ijtot
+    use modfields,  only : qt0,ql0,thl0,exnf
+    use modmpi,     only : mpierr, comm3d,mpi_sum, D_MPI_ALLREDUCE
+    implicit none
+    real    :: zil
+    integer :: location,i,j,k,nsamp,stride,blh_nsamp = 4
+    real, allocatable,dimension(:,:,:) :: blh_fld
+    real, allocatable, dimension(:) :: profile, gradient, dgrad
+    real, intent(inout) :: zi
+    allocate(blh_fld(2-ih:i1+ih,2-jh:j1+jh,k1))
+    allocate(profile(k1),gradient(k1),dgrad(k1))
+    zil = 0.0
+    gradient = 0.0
+    dgrad = 0.0
+    do k=1,k1
+      blh_fld(2:i1,2:j1,k) = (thl0(2:i1,2:j1,k)+rlv*ql0(2:i1,2:j1,k)/(cp*exnf(k))) &
+                  *(1+(rv/rd-1)*qt0(2:i1,2:j1,k)-rv/rd*ql0(2:i1,2:j1,k))
+    end do
+    stride = ceiling(real(imax)/real(blh_nsamp))
+    do i=2,stride+1
+      nsamp =  ceiling(real(i1-i+1)/real(stride))
+      do j=2,j1
+        profile  = sum(blh_fld(i:i1:stride,j,:),1)
+        gradient(2:k1) = (profile(2:k1) - profile(1:kmax))/dzh(2:k1)
+        dgrad(2:kmax)  = (gradient(3:k1) - gradient(2:kmax))/dzf(2:kmax)
+        location = maxloc(gradient,1)
+        zil  = zil + nsamp*(zh(location-1) - dzh(location)*dgrad(location-1)/(dgrad(location)-dgrad(location-1) + 1.e-8))
+      enddo
+    enddo
+
+    call D_MPI_ALLREDUCE(zil, zi, 1, MPI_SUM, comm3d,mpierr)
+    zi = zi / ijtot
+
+    deallocate(blh_fld)
+    deallocate(profile,gradient,dgrad)
+  end subroutine calc_zi
 
   function gaussrand(mu,sigma)
     use modglobal, only : pi,eps1

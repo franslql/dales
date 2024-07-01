@@ -377,7 +377,7 @@ contains
         endif
       endif
       ! Read input for turbulent pertubations
-      if(lsynturb .and. iturb <10) then
+      if(lsynturb .and. iturb <2) then
         ! Read u2
         STATUS = NF90_INQ_VARID(NCID, 'u2'//boundary(ib)%name, VARID)
         if (STATUS .ne. nf90_noerr) call handle_err(STATUS)

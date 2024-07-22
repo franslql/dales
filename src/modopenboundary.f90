@@ -459,12 +459,8 @@ contains
     ! Divergence correction
     if(myid==0) print *, "Start divergence correction boundaries"
     do it = 1,ntboundary
-      divnew = 1e9
-      divold = 1e9
-      icalc  = 0
-      do while (.True.)
+      do icalc=1,2
         ! Calculate divergence
-        divold = divnew
         div = 0.
         if(lboundary(1)) then
           do j = 1,jmax
@@ -502,16 +498,13 @@ contains
           end do
         endif
         call D_MPI_ALLREDUCE(div,sumdiv,1,MPI_SUM,comm3d,mpierr)
-        divnew = sumdiv
-        if(abs(divnew)<1e-5) then
-          if(myid==0) print *, 't,input,corrected,niter;',tboundary(it),divold,divnew,icalc
-          exit
-        elseif(icalc>20) then
-          if(myid==0) print *, 'Warning, divergence correction did not converge; t,input,corrected,niter;',tboundary(it),divold,divnew,icalc
-          exit
-        endif
-        divold = divnew
-        icalc = icalc+1
+        if(icalc==1) then
+           divold=sumdiv
+         else
+           divnew=sumdiv
+           if(myid==0) print *, 't,input,corrected;',tboundary(it),divold,divnew
+           exit
+         endif
         ! Apply correction, spread divergence over lateral boundaries
         if(lboundary(1)) then
           do k = 1,kmax

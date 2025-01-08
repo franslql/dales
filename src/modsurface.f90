@@ -71,7 +71,7 @@ contains
 !> Reads the namelists and initialises the soil.
   subroutine initsurface
 
-    use modglobal,  only : i1, j1, i2, j2, itot, jtot,imax,jmax, nsv, ifnamopt, fname_options, ifinput, cexpnr, checknamelisterror, handle_err
+    use modglobal,  only : i1, j1, i2, j2, itot, jtot,imax,jmax, nsv, ifnamopt, fname_options, ifinput, cexpnr, checknamelisterror, handle_err, lboundary
     use modraddata, only : iradiation,rad_shortw,irad_par,irad_user,irad_rrtmg
     use modmpi,     only : myid,  myidx, myidy, comm3d, mpierr, D_MPI_BCAST
     use netcdf
@@ -104,8 +104,8 @@ contains
       lsplitleaf, &
       ! Exponential emission function
       i_expemis, expemis0, expemis1, expemis2, &
-      ! heterogeneous tskin
-      ltskininp
+      ! heterogeneous tskin, z0 and rs
+      ltskininp, lz0inp, lrsinp
 
     ! 1    -   Initialize soil
 
@@ -178,6 +178,8 @@ contains
     call D_MPI_BCAST(expemis2                   ,            1, 0, comm3d, mpierr)
 
     call D_MPI_BCAST(ltskininp                  ,            1, 0, comm3d, mpierr)
+    call D_MPI_BCAST(lz0inp                     ,            1, 0, comm3d, mpierr)
+    call D_MPI_BCAST(lrsinp                     ,            1, 0, comm3d, mpierr)
 
     if(lCO2Ags .and. (.not. lrsAgs)) then
       if(myid==0) print *,"WARNING::: You set lCO2Ags to .true., but lrsAgs to .false."
@@ -734,6 +736,59 @@ contains
       if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
       STATUS = NF90_CLOSE(NCID)
       if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+    endif
+
+    if(lz0inp) then ! Use z0.inp.iexpnr.nc to define surface roughness
+      !--- open z0.inp.xxx.nc ---
+      STATUS = NF90_OPEN('z0.inp.'//cexpnr//'.nc', nf90_nowrite, NCID)
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      !--- read z0 input
+      allocate(z0inp( &
+        & 1+merge(1,0,lboundary(1)):i2-merge(1,0,lboundary(2)), &
+        & 1+merge(1,0,lboundary(3)):j2-merge(1,0,lboundary(4)) ) ) ! Take ghost cell into account
+      STATUS = NF90_INQ_VARID(NCID,'z0', VARID)
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      STATUS = NF90_GET_VAR (NCID, VARID, z0inp, &
+        & start=(/myidx*imax+merge(1,0,lboundary(1)),myidy*jmax+merge(1,0,lboundary(3))/), &
+        & count=(/i2-merge(1,0,lboundary(1))-merge(1,0,lboundary(2)),j2-merge(1,0,lboundary(3))-merge(1,0,lboundary(4))/))
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      STATUS = NF90_CLOSE(NCID)
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      ! z0m=0.!z0m = -9999.
+      ! z0h=0.!z0h = -9999.
+      do i = 1+merge(1,0,lboundary(1)), i2-merge(1,0,lboundary(2))
+        do j = 1+merge(1,0,lboundary(3)), j2-merge(1,0,lboundary(4))
+          z0m(i,j) = z0inp(i,j) 
+          z0h(i,j) = z0inp(i,j)
+        end do
+      end do
+      if(lboundary(1)) z0m(1,:) = z0m(2,:); z0h(1,:) = z0h(2,:)
+      if(lboundary(2)) z0m(i2,:) = z0m(i1,:); z0h(i2,:) = z0h(i1,:)
+      if(lboundary(3)) z0m(:,1) = z0m(:,2); z0h(:,1) = z0h(:,2)
+      if(lboundary(4)) z0m(:,j2) = z0m(:,j1); z0h(:,j2) = z0h(:,j1)
+      deallocate(z0inp)
+    endif
+
+    if(lrsinp) then ! Use rs.inp.iexpnr.nc to define surface composite resistance
+      !--- open rs.inp.xxx.nc ---
+      STATUS = NF90_OPEN('rs.inp.'//cexpnr//'.nc', nf90_nowrite, NCID)
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      !--- read rs input
+      allocate(rsinp(imax,jmax))
+      STATUS = NF90_INQ_VARID(NCID,'rs', VARID)
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      STATUS = NF90_GET_VAR (NCID, VARID, rsinp, start=(/myidx*imax+1,myidy*jmax+1/), &
+        & count=(/imax,jmax/))
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      STATUS = NF90_CLOSE(NCID)
+      if (STATUS .ne. nf90_noerr) call handle_err(STATUS)
+      rs = -9999.
+      do j = 2, j1
+        do i = 2, i1
+          rs(i,j) = rsinp(i-1,j-1)
+        end do
+      end do
+      deallocate(rsinp)
     endif
 
     return

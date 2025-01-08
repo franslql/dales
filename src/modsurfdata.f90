@@ -302,9 +302,9 @@ SAVE
   real              :: gD_land(max_lands)          = -1 !< Response factor vegetation to vapor pressure deficit [-]
   real, allocatable :: oblpatch(:,:)                    !<  Obukhov length [m]
 
-  ! Heterogneous tskin
-  logical           :: ltskininp = .false.
-  real, allocatable :: tskininp(:,:,:), ttskin(:)
+  ! Heterogneous tskin, z0 and rs
+  logical           :: ltskininp = .false., lz0inp = .false., lrsinp = .false.
+  real, allocatable :: tskininp(:,:,:), ttskin(:), z0inp(:,:), rsinp(:,:)
   integer           :: nttskin
 
 end module modsurfdata

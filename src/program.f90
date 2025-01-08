@@ -120,6 +120,7 @@ program DALES
 !     0.1     USE STATEMENTS FOR ADDONS STATISTICAL ROUTINES
 !----------------------------------------------------------------
   use modcape,         only : initcape,exitcape,docape
+  use modsurfdump,     only : initsurfdump,exitsurfdump,dosurfdump
   use modchecksim,     only : initchecksim, checksim
   use modstat_nc,      only : initstat_nc
   !use modspectra2,     only : dospecs,initspectra2,tanhfilter
@@ -201,6 +202,7 @@ program DALES
 
   !call initspectra2
   call initcape
+  call initsurfdump
 
 
 !------------------------------------------------------
@@ -211,6 +213,7 @@ program DALES
   call fielddump
   call crosssection
   call docape
+  call dosurfdump
   linit_out = .false. 
   do while (timeleft>0 .or. rk3step < 3)
     ! Calculate new timestep, and reset tendencies to 0.
@@ -317,6 +320,7 @@ program DALES
     call lsmcrosssection
     !call tanhfilter
     call docape
+    call dosurfdump
     !call projection
     call cloudfield
     call fielddump
@@ -360,6 +364,7 @@ program DALES
   call exitAGScross
   call exitlsmcrosssection
   call exitcape
+  call exitsurfdump
   call exitfielddump
   call exitradfield
   call exitheterostats

@@ -29,6 +29,7 @@ set( dales_srcs
 	modchem.f90
 	modcloudfield.f90
 	modcrosssection.f90
+	modmeancrosssection.f90
 	modcufft.f90
 	moddatetime.f90
 	moddepcrosssection.f90

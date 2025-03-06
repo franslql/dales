@@ -26,6 +26,7 @@ Notes: need cdo and fftw3 libraries. Results will be in results/.
 export SYST=gnu-fast
 mkdir build
 cd build/
+git submodule update --init --recursive
 cmake .. -DUSE_FFTW=True
 make
 

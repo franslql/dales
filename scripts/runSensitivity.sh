@@ -9,7 +9,7 @@ cd $pathSensitivity
 for tauh in ${tauh_array[@]}; do
   experiment="tauh${tauh}"
   cd $experiment
-  mpirun -np 8 ./dales4.4 2>&1 | tee output_sim.txt
+  mpirun -np 8 ./dales 2>&1 | tee output_sim.txt
   ./merge.sh 2>&1 | tee output_merge.txt 
   rm initd* 
   rm fielddump.00*

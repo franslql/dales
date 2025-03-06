@@ -22,7 +22,7 @@ for tauh in ${tauh_array[@]}; do
   cp ../../../input/initial_profiles/lscale.inp.xxx lscale.inp.001
   cp "../../../input/namoptions/namoptions.openBC_tauh${tauh}" namoptions
   ln -s ../../../input/boundary_input/openboundaries.inp.x000y000z000t000.nc openboundaries.inp.001.nc
-  ln -s ../../../build/src/dales4.4 .
+  ln -s ../../../build/bin/dales .
   ln -s ../../../scripts/merge.sh .
   cd ..
 done
